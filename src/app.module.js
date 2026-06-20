@@ -16,6 +16,7 @@ import { RateLimitUploadMiddleware } from './middleware/rate-limit-upload.middle
 import { HttpExceptionFilter } from './filters/http-exception.filter';
 import { AdminSecurityMiddleware } from './middleware/admin-security.middleware';
 import { AdminController } from './controller/admin.controller';
+import { ConnectMiddleware } from './middleware/connect.middleware';
 @Module({
   imports: [
   // ⚠️ IMPORTANTE: LoggerModule DEBE ir PRIMERO
@@ -71,6 +72,9 @@ export class AppModule {
     }, '✅ Configuración de microservicios académicos cargada desde .env');
   }
   configure(consumer) {
+    // 0. ConnectRPC Middleware (para endpoints RPC de Eliza)
+    consumer.apply(ConnectMiddleware).forRoutes('*');
+
     // ═══════════════════════════════════════════════════════════
     // ORDEN CRÍTICO DE MIDDLEWARES (NO CAMBIAR)
     // ═══════════════════════════════════════════════════════════
@@ -84,9 +88,13 @@ export class AppModule {
     // 1. Security Headers Middleware (aplicar a TODAS las rutas)
     consumer.apply(SecurityHeadersMiddleware).forRoutes('*');
 
-    // 2-5. Otros middlewares (EXCLUIR rutas /api/* que son internas)
-    // Las rutas /api/health, /api/ready, /api/live son públicas y no necesitan auth
-    consumer.apply(RateLimitIpMiddleware, TokenMiddleware, RateLimitUserMiddleware, RateLimitUploadMiddleware).exclude('/api/health', '/api/ready', '/api/live', '/api/(.*)' // Excluir todas las rutas /api/*
+    // 2-5. Otros middlewares (EXCLUIR rutas /api/* y RPC que son internas/públicas)
+    consumer.apply(RateLimitIpMiddleware, TokenMiddleware, RateLimitUserMiddleware, RateLimitUploadMiddleware).exclude(
+      '/api/health',
+      '/api/ready',
+      '/api/live',
+      '/api/(.*)',
+      '/eliza.v1.ElizaService/(.*)'
     ).forRoutes('*');
 
     // ═══════════════════════════════════════════════════════════
