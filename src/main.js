@@ -3,6 +3,8 @@ import { AppModule } from './app.module';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { Logger } from 'nestjs-pino';
 import { config } from 'dotenv';
+import { expressConnectMiddleware } from '@connectrpc/connect-express';
+import connectRoutes from './connect-routes';
 config();
 async function bootstrap() {
   // ⚠️ CRÍTICO: bufferLogs = true
@@ -88,6 +90,13 @@ async function bootstrap() {
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     allowedHeaders: 'Content-Type,Authorization,x-api-key'
   });
+
+  // Integración de ConnectRPC
+  app.use(
+    expressConnectMiddleware({
+      routes: connectRoutes,
+    })
+  );
 
   // Configuración de Swagger
   const config = new DocumentBuilder().setTitle('API Gateway - Sistema de Gestión Académica').setDescription('Documentación del API Gateway para el Sistema de Gestión Académica').setVersion('1.0').addApiKey({

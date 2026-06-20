@@ -20,6 +20,10 @@
     "test:e2e": "jest --config ./test/jest-e2e.json"
   },
   "dependencies": {
+    "@bufbuild/protobuf": "^2.12.0",
+    "@connectrpc/connect": "^2.1.2",
+    "@connectrpc/connect-express": "^2.1.2",
+    "@connectrpc/connect-node": "^2.1.2",
     "@nestjs-modules/ioredis": "^2.0.2",
     "@nestjs/cache-manager": "^2.3.0",
     "@nestjs/common": "^10.0.0",
@@ -49,6 +53,7 @@
     "@babel/plugin-syntax-decorators": "^7.29.7",
     "@babel/plugin-transform-class-properties": "^8.0.1",
     "@babel/preset-typescript": "^7.29.7",
+    "@bufbuild/buf": "^1.71.0",
     "@nestjs/cli": "^11.0.10",
     "@nestjs/schematics": "^10.0.0",
     "@nestjs/testing": "^10.0.0",
