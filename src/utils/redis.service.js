@@ -7,9 +7,14 @@ export class RedisService {
     this.logger = logger;
   }
   async onModuleInit() {
+    const redisProtocol = process.env.REDIS_PROTOCOL || 'redis';
     const redisHost = process.env.REDIS_HOST || 'localhost';
     const redisPort = process.env.REDIS_PORT || 6379;
-    const redisUrl = `redis://${redisHost}:${redisPort}`;
+    const redisPassword = process.env.REDIS_PASSWORD || '';
+
+    const authPart = redisPassword ? `:${redisPassword}@` : '';
+    const redisUrl = `${redisProtocol}://${authPart}${redisHost}:${redisPort}`;
+
     this.redisClient = createClient({
       url: redisUrl
     });

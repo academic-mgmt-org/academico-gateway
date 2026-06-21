@@ -282,31 +282,28 @@ export class ProxyService {
       }, HttpStatus.NOT_FOUND);
     }
 
-    // Obtener proxy cacheado
-    const proxy = this.proxyCache.get(microserviceName);
-    if (!proxy) {
-      // Esto no debería pasar si initializeProxies() funcionó correctamente
-      this.logger.error({
-        context: 'ProxyService',
-        event: 'proxy_not_found_in_cache',
-        microservice: microserviceName
-      }, `[Error Crítico] Proxy no encontrado en caché para ${microserviceName}`);
-      throw new HttpException({
-        error: 'Servicio temporalmente no disponible'
-      }, HttpStatus.SERVICE_UNAVAILABLE);
-    }
+    // Re-escribir la ruta para quitar el prefijo del microservicio
+    const urlParts = originalUrl.split('?');
+    const pathOnly = urlParts[0];
+    const queryOnly = urlParts[1] ? '?' + urlParts[1] : '';
+    const pathSegments = pathOnly.split('/').filter(segment => segment);
+    const rewrittenPath = '/' + pathSegments.slice(1).join('/') + queryOnly;
+    const destination = services[microserviceName].baseUrl + rewrittenPath;
 
-    // Copiar headers del request original al proxy
-    // Esto permite que cada request tenga sus propios headers (Authorization, etc.)
-    const originalHeaders = {
-      ...req.headers
-    };
-    req.headers = {
-      ...originalHeaders,
-      'x-api-key': services[microserviceName].apiKey
-    };
+    this.logger.debug({
+      context: 'ProxyService',
+      event: 'proxying_request_fastify',
+      microservice: microserviceName,
+      destination
+    }, `[Proxy] Enviando petición a ${destination} vía HTTP/2`);
 
-    // Ejecutar proxy cacheado
-    return proxy(req, res);
+    return res.from(destination, {
+      rewriteRequestHeaders: (originalReq, headers) => {
+        return {
+          ...headers,
+          'x-api-key': services[microserviceName].apiKey
+        };
+      }
+    });
   }
 }

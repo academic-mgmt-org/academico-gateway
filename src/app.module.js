@@ -27,8 +27,8 @@ import { ConnectMiddleware } from './middleware/connect.middleware';
   })],
   // ⚠️ ORDEN IMPORTANTE: HealthController DEBE ir ANTES que ProxyController
   // Esto asegura que las rutas /api/* no sean capturadas por el comodín * de ProxyController
-  controllers: [HealthController, AdminController, ProxyController],
-  providers: [ProxyService, RedisService, Logger,
+  controllers: [HealthController, AdminController],
+  providers: [RedisService, Logger,
   // ═══════════════════════════════════════════════════════════
   // FILTRO GLOBAL DE EXCEPCIONES
   // ═══════════════════════════════════════════════════════════

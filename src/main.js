@@ -1,23 +1,101 @@
 import { NestFactory } from '@nestjs/core';
+import { FastifyAdapter } from '@nestjs/platform-fastify';
 import { AppModule } from './app.module';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { Logger } from 'nestjs-pino';
+import httpProxy from '@fastify/http-proxy';
+import replyFrom from '@fastify/reply-from';
+import { services } from './config/services.config';
 import { config } from 'dotenv';
 config();
 async function bootstrap() {
   // ⚠️ CRÍTICO: bufferLogs = true
   // Esto permite que Pino capture logs ANTES de que el logger esté configurado
-  const app = await NestFactory.create(AppModule, {
-    bufferLogs: true,
-    bodyParser: false
-  });
+  const app = await NestFactory.create(
+    AppModule,
+    new FastifyAdapter({
+      http2: true
+    }),
+    {
+      bufferLogs: true,
+      bodyParser: false
+    }
+  );
+
+  const fastifyInstance = app.getHttpAdapter().getInstance();
+  const logger = app.get(Logger);
+
+  // Registrar proxy nativo de Fastify para cada microservicio
+  const microservices = ['usuarios', 'calificaciones', 'catalogo', 'matriculas', 'solicitudes'];
+  for (const name of microservices) {
+    const serviceConfig = services[name];
+    if (serviceConfig && serviceConfig.baseUrl) {
+      await fastifyInstance.register(httpProxy, {
+        upstream: serviceConfig.baseUrl,
+        prefix: `/${name}`,
+        http2: true,
+        replyOptions: {
+          rewriteRequestHeaders: (originalReq, headers) => {
+            return {
+              ...headers,
+              'x-api-key': serviceConfig.apiKey
+            };
+          }
+        }
+      });
+      logger.log(`[Proxy] Native HTTP/2 proxy registered for /${name} -> ${serviceConfig.baseUrl}`);
+    }
+  }
+  // Registrar proxy para rutas gRPC/ConnectRPC directas (paquetes con puntos como catalogo.v1.CatalogoService)
+  // NOTA: @fastify/http-proxy no soporta prefixes con puntos (.) correctamente,
+  // por lo que usamos @fastify/reply-from con rutas explícitas.
+  const grpcServiceMap = {
+    'catalogo.v1.CatalogoService': services.catalogo,
+  };
+
+  for (const [packagePath, serviceConfig] of Object.entries(grpcServiceMap)) {
+    if (!serviceConfig || !serviceConfig.baseUrl) continue;
+
+    // Cada servicio gRPC se registra en su propio scope encapsulado
+    // para poder tener un @fastify/reply-from con un `base` diferente
+    await fastifyInstance.register(async function grpcProxyPlugin(fastify) {
+      // Agregar content-type parser para application/grpc
+      // Fastify no reconoce este content-type por defecto y devuelve 415
+      fastify.addContentTypeParser('application/grpc', function (request, payload, done) {
+        const chunks = [];
+        payload.on('data', chunk => chunks.push(chunk));
+        payload.on('end', () => done(null, Buffer.concat(chunks)));
+        payload.on('error', done);
+      });
+
+      await fastify.register(replyFrom, {
+        base: serviceConfig.baseUrl,
+        http2: true,
+      });
+
+      // Registrar ruta para cada método gRPC (e.g., /catalogo.v1.CatalogoService/ListarMaterias)
+      fastify.all(`/${packagePath}/:method`, async (request, reply) => {
+        const targetPath = `/${packagePath}/${request.params.method}`;
+        logger.debug(`[gRPC Proxy] ${request.method} ${targetPath} -> ${serviceConfig.baseUrl}${targetPath}`);
+        return reply.from(targetPath, {
+          rewriteRequestHeaders: (originalReq, headers) => {
+            return {
+              ...headers,
+              'x-api-key': serviceConfig.apiKey
+            };
+          }
+        });
+      });
+
+      logger.log(`[Proxy] gRPC route registered: /${packagePath}/* -> ${serviceConfig.baseUrl}`);
+    });
+  }
 
   // Configurar Pino como logger global
   // Esto reemplaza el logger por defecto de NestJS
   app.useLogger(app.get(Logger));
 
   // Obtener instancia del logger para uso en bootstrap
-  const logger = app.get(Logger);
 
   // 🔧 PREVENCIÓN DE MEMORY LEAK: Incrementar límite de EventEmitters
   // Esto previene warnings cuando hay múltiples proxies activos
@@ -98,7 +176,7 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api-docs', app, document);
   const port = process.env.PORT || 3000;
-  await app.listen(port);
+  await app.listen(port, '0.0.0.0');
 
   // Log estructurado de inicio
   logger.log({
