@@ -8,7 +8,7 @@ import { fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2
  * Describes the file eliza.proto.
  */
 export const file_eliza = /*@__PURE__*/
-  fileDesc("CgtlbGl6YS5wcm90bxIIZWxpemEudjEiHgoKU2F5UmVxdWVzdBIQCghzZW50ZW5jZRgBIAEoCSIfCgtTYXlSZXNwb25zZRIQCghzZW50ZW5jZRgBIAEoCTJECgxFbGl6YVNlcnZpY2USNAoDU2F5EhQuZWxpemEudjEuU2F5UmVxdWVzdBoVLmVsaXphLnYxLlNheVJlc3BvbnNlIgBiBnByb3RvMw");
+  fileDesc("CgtlbGl6YS5wcm90bxIIZWxpemEudjEiHgoKU2F5UmVxdWVzdBIQCghzZW50ZW5jZRgBIAEoCSIfCgtTYXlSZXNwb25zZRIQCghzZW50ZW5jZRgBIAEoCSJHCgxMb2dpblJlcXVlc3QSEAoIdXNlcm5hbWUYASABKAkSEAoIcGFzc3dvcmQYAiABKAkSEwoLYXBwX3ZlcnNpb24YAyABKAkibwoNTG9naW5SZXNwb25zZRIUCgxhY2Nlc3NfdG9rZW4YASABKAkSFQoNcmVmcmVzaF90b2tlbhgCIAEoCRIUCgxtZmFfcmVxdWlyZWQYAyABKAgSGwoTcmVxdWlyZXNfYXBwX3VwZGF0ZRgEIAEoCDKAAQoMRWxpemFTZXJ2aWNlEjQKA1NheRIULmVsaXphLnYxLlNheVJlcXVlc3QaFS5lbGl6YS52MS5TYXlSZXNwb25zZSIAEjoKBUxvZ2luEhYuZWxpemEudjEuTG9naW5SZXF1ZXN0GhcuZWxpemEudjEuTG9naW5SZXNwb25zZSIAYgZwcm90bzM");
 
 /**
  * Describes the message eliza.v1.SayRequest.
@@ -23,6 +23,20 @@ export const SayRequestSchema = /*@__PURE__*/
  */
 export const SayResponseSchema = /*@__PURE__*/
   messageDesc(file_eliza, 1);
+
+/**
+ * Describes the message eliza.v1.LoginRequest.
+ * Use `create(LoginRequestSchema)` to create a new message.
+ */
+export const LoginRequestSchema = /*@__PURE__*/
+  messageDesc(file_eliza, 2);
+
+/**
+ * Describes the message eliza.v1.LoginResponse.
+ * Use `create(LoginResponseSchema)` to create a new message.
+ */
+export const LoginResponseSchema = /*@__PURE__*/
+  messageDesc(file_eliza, 3);
 
 /**
  * @generated from service eliza.v1.ElizaService

@@ -54,6 +54,7 @@ async function bootstrap() {
   // por lo que usamos @fastify/reply-from con rutas explícitas.
   const grpcServiceMap = {
     'catalogo.v1.CatalogoService': services.catalogo,
+    'eliza.v1.ElizaService': services.usuarios,
   };
 
   for (const [packagePath, serviceConfig] of Object.entries(grpcServiceMap)) {
@@ -195,8 +196,11 @@ async function bootstrap() {
   app.connectMicroservice({
     transport: Transport.GRPC,
     options: {
-      package: 'catalogo.v1',
-      protoPath: join(__dirname, 'proto/catalogo/v1/catalogo.proto'),
+      package: ['catalogo.v1', 'eliza.v1'],
+      protoPath: [
+        join(__dirname, 'proto/catalogo/v1/catalogo.proto'),
+        join(__dirname, 'proto/eliza.proto'),
+      ],
       url: `0.0.0.0:${grpcPort}`,
       onLoadPackageDefinition: (pkg, server) => {
         new ReflectionService(pkg).addToServer(server);

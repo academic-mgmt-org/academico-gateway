@@ -19,6 +19,8 @@ import { AdminController } from './controller/admin.controller';
 import { ConnectMiddleware } from './middleware/connect.middleware';
 import { GrpcCatalogoController } from './controller/grpc-catalogo.controller';
 import { CatalogoGrpcClientService } from './services/catalogo-grpc-client.service';
+import { GrpcElizaController } from './controller/grpc-eliza.controller';
+import { ElizaGrpcClientService } from './services/eliza-grpc-client.service';
 @Module({
   imports: [
   // ⚠️ IMPORTANTE: LoggerModule DEBE ir PRIMERO
@@ -29,8 +31,8 @@ import { CatalogoGrpcClientService } from './services/catalogo-grpc-client.servi
   })],
   // ⚠️ ORDEN IMPORTANTE: HealthController DEBE ir ANTES que ProxyController
   // Esto asegura que las rutas /api/* no sean capturadas por el comodín * de ProxyController
-  controllers: [HealthController, AdminController, GrpcCatalogoController],
-  providers: [RedisService, Logger, CatalogoGrpcClientService,
+  controllers: [HealthController, AdminController, GrpcCatalogoController, GrpcElizaController],
+  providers: [RedisService, Logger, CatalogoGrpcClientService, ElizaGrpcClientService,
   // ═══════════════════════════════════════════════════════════
   // FILTRO GLOBAL DE EXCEPCIONES
   // ═══════════════════════════════════════════════════════════
