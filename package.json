@@ -31,6 +31,7 @@
     "@fastify/swagger-ui": "^3.1.0",
     "@grpc/grpc-js": "^1.14.4",
     "@grpc/proto-loader": "^0.8.1",
+    "@grpc/reflection": "^1.0.4",
     "@nestjs-modules/ioredis": "^2.0.2",
     "@nestjs/cache-manager": "^2.3.0",
     "@nestjs/common": "^10.0.0",

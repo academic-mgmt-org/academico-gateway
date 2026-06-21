@@ -5,6 +5,7 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { Logger } from 'nestjs-pino';
 import { Transport } from '@nestjs/microservices';
 import { join } from 'path';
+import { ReflectionService } from '@grpc/reflection';
 import httpProxy from '@fastify/http-proxy';
 import replyFrom from '@fastify/reply-from';
 import { services } from './config/services.config';
@@ -197,6 +198,9 @@ async function bootstrap() {
       package: 'catalogo.v1',
       protoPath: join(__dirname, 'proto/catalogo/v1/catalogo.proto'),
       url: `0.0.0.0:${grpcPort}`,
+      onLoadPackageDefinition: (pkg, server) => {
+        new ReflectionService(pkg).addToServer(server);
+      },
     },
   });
 
