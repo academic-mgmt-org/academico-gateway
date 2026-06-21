@@ -123,7 +123,7 @@ export class TokenMiddleware {
         event: 'token_validation_from_service',
         path
       }, `🔄 Token no en caché, validando con Usuarios...`);
-      const url = `${seguridadService.baseUrl}/api/v1/auth/validate-token`;
+      const url = `${seguridadService.baseUrl}/api/v1/auth/validate-token-2`;
 
       // Usar agente HTTP con connection pooling para reducir latencia
       const agent = url.startsWith('https://') ? httpsAgent : httpAgent;
