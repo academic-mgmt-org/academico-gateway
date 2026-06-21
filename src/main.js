@@ -3,6 +3,8 @@ import { FastifyAdapter } from '@nestjs/platform-fastify';
 import { AppModule } from './app.module';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { Logger } from 'nestjs-pino';
+import { Transport } from '@nestjs/microservices';
+import { join } from 'path';
 import httpProxy from '@fastify/http-proxy';
 import replyFrom from '@fastify/reply-from';
 import { services } from './config/services.config';
@@ -168,13 +170,45 @@ async function bootstrap() {
   });
 
   // Configuración de Swagger
-  const config = new DocumentBuilder().setTitle('API Gateway - Sistema de Gestión Académica').setDescription('Documentación del API Gateway para el Sistema de Gestión Académica').setVersion('1.0').addApiKey({
+  const swaggerConfig = new DocumentBuilder().setTitle('API Gateway - Sistema de Gestión Académica').setDescription('Documentación del API Gateway para el Sistema de Gestión Académica').setVersion('1.0').addApiKey({
     type: 'apiKey',
     name: 'x-api-key',
     in: 'header'
   }, 'apiKey').build();
-  const document = SwaggerModule.createDocument(app, config);
+  const document = SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup('api-docs', app, document);
+
+  // ═══════════════════════════════════════════════════════════
+  // SERVIDOR gRPC NATIVO (puerto 50050)
+  // ═══════════════════════════════════════════════════════════
+  // El gateway ahora actúa como servidor gRPC real usando @grpc/grpc-js.
+  // Esto permite que clientes gRPC (grpcurl, otros servicios) se conecten
+  // directamente al gateway con el protocolo gRPC nativo completo
+  // (incluidos HTTP/2 trailers: grpc-status, grpc-message).
+  //
+  // Flujo:
+  //   grpcurl → Gateway:50050 (gRPC) → GrpcCatalogoController
+  //     → CatalogoGrpcClientService (ConnectRPC) → academico-catalogo:3003
+  // ═══════════════════════════════════════════════════════════
+  const grpcPort = process.env.GRPC_PORT || '50050';
+  app.connectMicroservice({
+    transport: Transport.GRPC,
+    options: {
+      package: 'catalogo.v1',
+      protoPath: join(__dirname, 'proto/catalogo/v1/catalogo.proto'),
+      url: `0.0.0.0:${grpcPort}`,
+    },
+  });
+
+  // Iniciar todos los microservicios (gRPC) antes de escuchar HTTP
+  await app.startAllMicroservices();
+  logger.log({
+    context: 'Bootstrap',
+    event: 'grpc_server_started',
+    port: grpcPort,
+  }, `🔌 Servidor gRPC nativo escuchando en puerto ${grpcPort}`);
+
+  // Iniciar servidor HTTP/2 (Fastify)
   const port = process.env.PORT || 3000;
   await app.listen(port, '0.0.0.0');
 
@@ -182,14 +216,16 @@ async function bootstrap() {
   logger.log({
     context: 'Bootstrap',
     event: 'application_started',
-    port,
+    httpPort: port,
+    grpcPort,
     environment: process.env.NODE_ENV || 'development',
     nodeVersion: process.version,
     features: {
       cors: true,
       websocket: false,
-      swagger: true
+      swagger: true,
+      grpc: true
     }
-  }, `🚀 API Gateway corriendo en puerto ${port}`);
+  }, `🚀 API Gateway corriendo — HTTP: ${port} | gRPC: ${grpcPort}`);
 }
 bootstrap();

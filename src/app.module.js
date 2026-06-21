@@ -17,6 +17,8 @@ import { HttpExceptionFilter } from './filters/http-exception.filter';
 import { AdminSecurityMiddleware } from './middleware/admin-security.middleware';
 import { AdminController } from './controller/admin.controller';
 import { ConnectMiddleware } from './middleware/connect.middleware';
+import { GrpcCatalogoController } from './controller/grpc-catalogo.controller';
+import { CatalogoGrpcClientService } from './services/catalogo-grpc-client.service';
 @Module({
   imports: [
   // ⚠️ IMPORTANTE: LoggerModule DEBE ir PRIMERO
@@ -27,8 +29,8 @@ import { ConnectMiddleware } from './middleware/connect.middleware';
   })],
   // ⚠️ ORDEN IMPORTANTE: HealthController DEBE ir ANTES que ProxyController
   // Esto asegura que las rutas /api/* no sean capturadas por el comodín * de ProxyController
-  controllers: [HealthController, AdminController],
-  providers: [RedisService, Logger,
+  controllers: [HealthController, AdminController, GrpcCatalogoController],
+  providers: [RedisService, Logger, CatalogoGrpcClientService,
   // ═══════════════════════════════════════════════════════════
   // FILTRO GLOBAL DE EXCEPCIONES
   // ═══════════════════════════════════════════════════════════
