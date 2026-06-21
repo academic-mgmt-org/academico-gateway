@@ -1,5 +1,5 @@
 import { Controller, Inject } from '@nestjs/common';
-import { GrpcMethod } from '@nestjs/microservices';
+import { GrpcMethod, RpcException } from '@nestjs/microservices';
 import { Logger } from 'nestjs-pino';
 import { ElizaGrpcClientService } from '../services/eliza-grpc-client.service';
 
@@ -93,7 +93,13 @@ export class GrpcElizaController {
         username: data?.username || null,
         error: error.message,
       }, `[gRPC] Error en Login para usuario=${data?.username || null}: ${error.message}`);
-      throw error;
+      
+      const grpcCode = error.code !== undefined ? error.code : 13;
+      const message = error.rawMessage || error.message;
+      throw new RpcException({
+        code: grpcCode,
+        message: message,
+      });
     }
   }
 }
