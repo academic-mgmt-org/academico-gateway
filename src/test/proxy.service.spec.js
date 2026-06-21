@@ -30,9 +30,9 @@ describe('ProxyService', () => {
       method: 'POST',
       headers: {}
     };
-    const res = {};
-    const fakeProxy = jest.fn();
-    httpProxy.createProxyMiddleware.mockReturnValue(fakeProxy);
+    const res = {
+      from: jest.fn()
+    };
 
     // Simular un servicio registrado
     services.usuarios = {
@@ -40,16 +40,25 @@ describe('ProxyService', () => {
       apiKey: 'clave-usuarios'
     };
 
-    // Inicializar proxies para llenar el cache
+    // Inicializar proxies
     proxyService.onModuleInit();
     await proxyService.processRequest(req, res);
-    expect(httpProxy.createProxyMiddleware).toHaveBeenCalledWith(expect.objectContaining({
-      target: 'http://usuarios.test',
-      headers: {
-        'x-api-key': 'clave-usuarios'
-      }
-    }));
-    expect(fakeProxy).toHaveBeenCalledWith(req, res);
+    
+    expect(res.from).toHaveBeenCalledWith(
+      'http://usuarios.test/login',
+      expect.objectContaining({
+        rewriteRequestHeaders: expect.any(Function)
+      })
+    );
+
+    // Probar el comportamiento de rewriteRequestHeaders
+    const options = res.from.mock.calls[0][1];
+    const originalHeaders = { 'content-type': 'application/json', 'authorization': 'Bearer test' };
+    const rewrittenHeaders = options.rewriteRequestHeaders(req, originalHeaders);
+    expect(rewrittenHeaders).toEqual({
+      ...originalHeaders,
+      'x-api-key': 'clave-usuarios'
+    });
   });
   it('❌ debe lanzar HttpException si la URL no tiene segmentos válidos', async () => {
     const req = {

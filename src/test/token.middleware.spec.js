@@ -106,7 +106,7 @@ describe('TokenMiddleware', () => {
       }
     });
     await middleware.use(req, res, next);
-    expect(mockedAxios.post).toHaveBeenCalledWith('http://usuarios.test/api/v1/auth/validate-token', {}, expect.objectContaining({
+    expect(mockedAxios.post).toHaveBeenCalledWith('http://usuarios.test/api/v1/auth/validate-token-2', {}, expect.objectContaining({
       headers: expect.objectContaining({
         authorization: 'Bearer test-token',
         'x-api-key': 'test-api-key'
