@@ -1,6 +1,5 @@
 # Docker
 # Build and push an image to Azure Container Registry
-# https://docs.microsoft.com/azure/devops/pipelines/languages/docker
 
 trigger:
 - main
@@ -18,6 +17,9 @@ variables:
 
   # Agent VM image name
   vmImageName: 'ubuntu-latest'
+
+  # Container name on your personal server
+  containerName: 'academico-gateway'
 
 stages:
 - stage: Build
@@ -37,3 +39,45 @@ stages:
         containerRegistry: $(dockerRegistryServiceConnection)
         tags: |
           $(tag)
+
+- stage: Deploy
+  displayName: Deploy to personal server
+  dependsOn: Build
+  condition: succeeded()
+  jobs:
+  - deployment: DeployToPersonalServer
+    displayName: Deploy Docker container
+    environment:
+      name: 'servidor-gateway'
+      resourceType: virtualMachine
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - task: Docker@2
+            displayName: Login to Azure Container Registry
+            inputs:
+              command: login
+              containerRegistry: $(dockerRegistryServiceConnection)
+
+          - script: |
+              echo "Pulling image..."
+              docker pull $(containerRegistry)/$(imageRepository):$(tag)
+
+              echo "Stopping old container..."
+              docker rm -f $(containerName) || true
+
+              echo "Starting new container..."
+              docker run -d \
+                --name $(containerName) \
+                --restart unless-stopped \
+                -p 3000:3000 \
+                -p 50050:50050 \
+                --env-file /home/azureuser/academico-gateway/.env \
+                $(containerRegistry)/$(imageRepository):$(tag)
+
+              echo "Cleaning up dangling images..."
+              docker image prune -f
+
+              echo "Deployment completed."
+            displayName: Run container on personal server
