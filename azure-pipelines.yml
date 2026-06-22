@@ -39,6 +39,7 @@ stages:
         containerRegistry: $(dockerRegistryServiceConnection)
         tags: |
           $(tag)
+        addPipelineData: false
 
 - stage: Deploy
   displayName: Deploy to personal server
