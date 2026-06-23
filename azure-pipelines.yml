@@ -96,6 +96,7 @@ stages:
               RATE_LIMIT_UPLOAD_MAX=${RATE_LIMIT_UPLOAD_MAX}
               RATE_LIMIT_UPLOAD_WINDOW=${RATE_LIMIT_UPLOAD_WINDOW}
               EOF
+              chmod 600 /home/azureuser/academico-gateway/.env
             displayName: 'Create .env file on personal server'
             env:
               PORT: 3000
