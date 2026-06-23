@@ -62,11 +62,90 @@ stages:
               containerRegistry: $(dockerRegistryServiceConnection)
 
           - script: |
+              echo "Creating environment folder and file..."
+              mkdir -p /home/azureuser/academico-gateway
+              umask 077
+              cat > /home/azureuser/academico-gateway/.env << EOF
+              PORT=${PORT}
+              NODE_ENV=${NODE_ENV}
+              REDIS_PROTOCOL=${REDIS_PROTOCOL}
+              REDIS_HOST=${REDIS_HOST}
+              REDIS_PORT=${REDIS_PORT}
+              REDIS_PASSWORD=${REDIS_PASSWORD}
+              USUARIOS_BASE_URL=${USUARIOS_BASE_URL}
+              USUARIOS_API_KEY=${USUARIOS_API_KEY}
+              CALIFICACIONES_BASE_URL=${CALIFICACIONES_BASE_URL}
+              CALIFICACIONES_API_KEY=${CALIFICACIONES_API_KEY}
+              CATALOGO_BASE_URL=${CATALOGO_BASE_URL}
+              CATALOGO_API_KEY=${CATALOGO_API_KEY}
+              MATRICULAS_BASE_URL=${MATRICULAS_BASE_URL}
+              MATRICULAS_API_KEY=${MATRICULAS_API_KEY}
+              SOLICITUDES_BASE_URL=${SOLICITUDES_BASE_URL}
+              SOLICITUDES_API_KEY=${SOLICITUDES_API_KEY}
+              GATEWAY_TOKEN_CACHE_TTL=${GATEWAY_TOKEN_CACHE_TTL}
+              GATEWAY_WHITELIST_CACHE_TTL=${GATEWAY_WHITELIST_CACHE_TTL}
+              ENV=${ENV}
+              GRPC_PORT=${GRPC_PORT}
+              RATE_LIMIT_IP_ENABLED=${RATE_LIMIT_IP_ENABLED}
+              RATE_LIMIT_IP_MAX=${RATE_LIMIT_IP_MAX}
+              RATE_LIMIT_IP_WINDOW=${RATE_LIMIT_IP_WINDOW}
+              RATE_LIMIT_USER_ENABLED=${RATE_LIMIT_USER_ENABLED}
+              RATE_LIMIT_USER_MAX=${RATE_LIMIT_USER_MAX}
+              RATE_LIMIT_USER_WINDOW=${RATE_LIMIT_USER_WINDOW}
+              RATE_LIMIT_UPLOAD_ENABLED=${RATE_LIMIT_UPLOAD_ENABLED}
+              RATE_LIMIT_UPLOAD_MAX=${RATE_LIMIT_UPLOAD_MAX}
+              RATE_LIMIT_UPLOAD_WINDOW=${RATE_LIMIT_UPLOAD_WINDOW}
+              EOF
+            displayName: 'Create .env file on personal server'
+            env:
+              PORT: 3000
+              NODE_ENV: production
+              REDIS_PROTOCOL: $(REDIS_PROTOCOL)
+              REDIS_HOST: $(REDIS_HOST)
+              REDIS_PORT: $(REDIS_PORT)
+              REDIS_PASSWORD: $(REDIS_PASSWORD)
+              USUARIOS_BASE_URL: $(USUARIOS_BASE_URL)
+              USUARIOS_API_KEY: $(USUARIOS_API_KEY)
+              CALIFICACIONES_BASE_URL: $(CALIFICACIONES_BASE_URL)
+              CALIFICACIONES_API_KEY: $(CALIFICACIONES_API_KEY)
+              CATALOGO_BASE_URL: $(CATALOGO_BASE_URL)
+              CATALOGO_API_KEY: $(CATALOGO_API_KEY)
+              MATRICULAS_BASE_URL: $(MATRICULAS_BASE_URL)
+              MATRICULAS_API_KEY: $(MATRICULAS_API_KEY)
+              SOLICITUDES_BASE_URL: $(SOLICITUDES_BASE_URL)
+              SOLICITUDES_API_KEY: $(SOLICITUDES_API_KEY)
+              GATEWAY_TOKEN_CACHE_TTL: $(GATEWAY_TOKEN_CACHE_TTL)
+              GATEWAY_WHITELIST_CACHE_TTL: $(GATEWAY_WHITELIST_CACHE_TTL)
+              ENV: $(ENV)
+              GRPC_PORT: $(GRPC_PORT)
+              RATE_LIMIT_IP_ENABLED: $(RATE_LIMIT_IP_ENABLED)
+              RATE_LIMIT_IP_MAX: $(RATE_LIMIT_IP_MAX)
+              RATE_LIMIT_IP_WINDOW: $(RATE_LIMIT_IP_WINDOW)
+              RATE_LIMIT_USER_ENABLED: $(RATE_LIMIT_USER_ENABLED)
+              RATE_LIMIT_USER_MAX: $(RATE_LIMIT_USER_MAX)
+              RATE_LIMIT_USER_WINDOW: $(RATE_LIMIT_USER_WINDOW)
+              RATE_LIMIT_UPLOAD_ENABLED: $(RATE_LIMIT_UPLOAD_ENABLED)
+              RATE_LIMIT_UPLOAD_MAX: $(RATE_LIMIT_UPLOAD_MAX)
+              RATE_LIMIT_UPLOAD_WINDOW: $(RATE_LIMIT_UPLOAD_WINDOW)
+
+          - script: |
               echo "Pulling image..."
               docker pull $(containerRegistry)/$(imageRepository):$(tag)
 
               echo "Stopping old container..."
               docker rm -f $(containerName) || true
+
+              echo "Stopping any container using gateway ports..."
+              PORT_CONTAINERS=$(
+                {
+                  docker ps -q --filter "publish=3000"
+                  docker ps -q --filter "publish=50050"
+                } | sort -u
+              )
+
+              if [ -n "$PORT_CONTAINERS" ]; then
+                docker rm -f $PORT_CONTAINERS
+              fi
 
               echo "Starting new container..."
               docker run -d \
@@ -75,7 +154,17 @@ stages:
                 -p 3000:3000 \
                 -p 50050:50050 \
                 --env-file /home/azureuser/academico-gateway/.env \
+                -e NODE_ENV=production \
                 $(containerRegistry)/$(imageRepository):$(tag)
+
+              echo "Verifying container is running..."
+              sleep 5
+              if ! docker ps --filter "name=^/$(containerName)$" --filter "status=running" --format '{{.Names}}' | grep -qx "$(containerName)"; then
+                echo "Container $(containerName) did not stay running."
+                docker ps -a --filter "name=^/$(containerName)$"
+                docker logs --tail 200 $(containerName) || true
+                exit 1
+              fi
 
               echo "Cleaning up dangling images..."
               docker image prune -f
