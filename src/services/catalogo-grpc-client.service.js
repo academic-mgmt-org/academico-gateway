@@ -55,9 +55,9 @@ export class CatalogoGrpcClientService {
   }
 
   /**
-   * Listar todas las materias, opcionalmente filtradas por carrera.
-   * @param {{ carreraId?: string }} data
-   * @returns {Promise<{ materias: Array<{ id: string, codigo: string, nombre: string, creditos: number }> }>}
+   * Listar materias, opcionalmente filtradas por carrera, malla y nivel.
+   * @param {{ carreraId?: string, carreraCodigo?: string, nivelPeriodo?: number, mallaId?: string, soloMallaVigente?: boolean }} data
+   * @returns {Promise<{ materias: Array<{ id: string, codigo: string, nombre: string, creditos: number, carreraId?: string, carreraCodigo?: string, carreraNombre?: string, nivelPeriodo?: number, mallaId?: string, mallaCodigo?: string, mallaVersion?: string, orden?: number, tipo?: string }> }>}
    */
   async listarMaterias(data = {}) {
     if (!this.client) {
@@ -68,10 +68,18 @@ export class CatalogoGrpcClientService {
       context: 'CatalogoGrpcClientService',
       event: 'listar_materias_request',
       carreraId: data.carreraId || null,
+      carreraCodigo: data.carreraCodigo || null,
+      nivelPeriodo: data.nivelPeriodo || null,
+      mallaId: data.mallaId || null,
+      soloMallaVigente: data.soloMallaVigente || false,
     }, '[Catálogo] Solicitando ListarMaterias al microservicio');
 
     const response = await this.client.listarMaterias({
       carreraId: data.carreraId || '',
+      carreraCodigo: data.carreraCodigo || '',
+      nivelPeriodo: data.nivelPeriodo || 0,
+      mallaId: data.mallaId || '',
+      soloMallaVigente: data.soloMallaVigente || false,
     });
 
     this.logger.debug({
@@ -86,7 +94,7 @@ export class CatalogoGrpcClientService {
   /**
    * Obtener una materia por su ID.
    * @param {{ id: string }} data
-   * @returns {Promise<{ materia: { id: string, codigo: string, nombre: string, creditos: number } }>}
+   * @returns {Promise<{ materia: { id: string, codigo: string, nombre: string, creditos: number, carreraId?: string, carreraCodigo?: string, carreraNombre?: string, nivelPeriodo?: number, mallaId?: string, mallaCodigo?: string, mallaVersion?: string, orden?: number, tipo?: string } }>}
    */
   async obtenerMateria(data) {
     if (!this.client) {

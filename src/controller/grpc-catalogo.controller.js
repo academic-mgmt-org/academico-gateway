@@ -37,6 +37,10 @@ export class GrpcCatalogoController {
       context: 'GrpcCatalogoController',
       event: 'listar_materias',
       carreraId: data?.carreraId || null,
+      carreraCodigo: data?.carreraCodigo || null,
+      nivelPeriodo: data?.nivelPeriodo || null,
+      mallaId: data?.mallaId || null,
+      soloMallaVigente: data?.soloMallaVigente || false,
     }, '[gRPC] ListarMaterias llamado');
 
     try {
@@ -48,6 +52,15 @@ export class GrpcCatalogoController {
         codigo: m.codigo,
         nombre: m.nombre,
         creditos: m.creditos,
+        carreraId: m.carreraId || '',
+        carreraCodigo: m.carreraCodigo || '',
+        carreraNombre: m.carreraNombre || '',
+        nivelPeriodo: m.nivelPeriodo || 0,
+        mallaId: m.mallaId || '',
+        mallaCodigo: m.mallaCodigo || '',
+        mallaVersion: m.mallaVersion || '',
+        orden: m.orden || 0,
+        tipo: m.tipo || '',
       }));
 
       this.logger.log({
@@ -87,6 +100,15 @@ export class GrpcCatalogoController {
         codigo: response.materia.codigo,
         nombre: response.materia.nombre,
         creditos: response.materia.creditos,
+        carreraId: response.materia.carreraId || '',
+        carreraCodigo: response.materia.carreraCodigo || '',
+        carreraNombre: response.materia.carreraNombre || '',
+        nivelPeriodo: response.materia.nivelPeriodo || 0,
+        mallaId: response.materia.mallaId || '',
+        mallaCodigo: response.materia.mallaCodigo || '',
+        mallaVersion: response.materia.mallaVersion || '',
+        orden: response.materia.orden || 0,
+        tipo: response.materia.tipo || '',
       } : null;
 
       this.logger.log({
