@@ -20,6 +20,14 @@ variables:
 
   # Container name on your personal server
   containerName: 'academico-gateway'
+  acrName: 'acracademicoutn'
+  productionHost: '20.96.156.43'
+  productionUser: 'azureuser'
+  productionSshKey: '/home/azureuser/academico-prod-gateway.pem'
+  productionGatewayPath: '/home/azureuser/academico-gateway'
+  productionWebPath: '/home/azureuser/academico-web'
+  productionApproverUser: 'Guytho1996'
+  productionApprover: 'gacalderonr@utn.edu.ec'
 
 stages:
 - stage: Build
@@ -41,13 +49,13 @@ stages:
           $(tag)
         addPipelineData: false
 
-- stage: Deploy
-  displayName: Deploy to personal server
+- stage: DeployProduction
+  displayName: Deploy to production
   dependsOn: Build
   condition: succeeded()
   jobs:
-  - deployment: DeployToPersonalServer
-    displayName: Deploy Docker container
+  - deployment: DeployToProductionServer
+    displayName: Deploy production containers
     environment:
       name: 'servidor-gateway'
       resourceType: virtualMachine
@@ -55,49 +63,65 @@ stages:
       runOnce:
         deploy:
           steps:
-          - task: Docker@2
-            displayName: Login to Azure Container Registry
-            inputs:
-              command: login
-              containerRegistry: $(dockerRegistryServiceConnection)
-
           - script: |
+              set -euo pipefail
+
               echo "Creating environment folder and file..."
-              mkdir -p /home/azureuser/academico-gateway
+              SSH_KEY="$(productionSshKey)"
+              SSH_TARGET="$(productionUser)@$(productionHost)"
+              GATEWAY_ENV_FILE="$(Pipeline.Workspace)/gateway.production.env"
+
+              if [ ! -f "$SSH_KEY" ]; then
+                echo "SSH key not found at $SSH_KEY"
+                exit 1
+              fi
+
+              chmod 600 "$SSH_KEY"
               umask 077
-              cat > /home/azureuser/academico-gateway/.env << EOF
-              PORT=${PORT}
-              NODE_ENV=${NODE_ENV}
-              REDIS_PROTOCOL=${REDIS_PROTOCOL}
-              REDIS_HOST=${REDIS_HOST}
-              REDIS_PORT=${REDIS_PORT}
-              REDIS_PASSWORD=${REDIS_PASSWORD}
-              USUARIOS_BASE_URL=${USUARIOS_BASE_URL}
-              USUARIOS_API_KEY=${USUARIOS_API_KEY}
-              CALIFICACIONES_BASE_URL=${CALIFICACIONES_BASE_URL}
-              CALIFICACIONES_API_KEY=${CALIFICACIONES_API_KEY}
-              CATALOGO_BASE_URL=${CATALOGO_BASE_URL}
-              CATALOGO_API_KEY=${CATALOGO_API_KEY}
-              MATRICULAS_BASE_URL=${MATRICULAS_BASE_URL}
-              MATRICULAS_API_KEY=${MATRICULAS_API_KEY}
-              SOLICITUDES_BASE_URL=${SOLICITUDES_BASE_URL}
-              SOLICITUDES_API_KEY=${SOLICITUDES_API_KEY}
-              GATEWAY_TOKEN_CACHE_TTL=${GATEWAY_TOKEN_CACHE_TTL}
-              GATEWAY_WHITELIST_CACHE_TTL=${GATEWAY_WHITELIST_CACHE_TTL}
-              ENV=${ENV}
-              GRPC_PORT=${GRPC_PORT}
-              RATE_LIMIT_IP_ENABLED=${RATE_LIMIT_IP_ENABLED}
-              RATE_LIMIT_IP_MAX=${RATE_LIMIT_IP_MAX}
-              RATE_LIMIT_IP_WINDOW=${RATE_LIMIT_IP_WINDOW}
-              RATE_LIMIT_USER_ENABLED=${RATE_LIMIT_USER_ENABLED}
-              RATE_LIMIT_USER_MAX=${RATE_LIMIT_USER_MAX}
-              RATE_LIMIT_USER_WINDOW=${RATE_LIMIT_USER_WINDOW}
-              RATE_LIMIT_UPLOAD_ENABLED=${RATE_LIMIT_UPLOAD_ENABLED}
-              RATE_LIMIT_UPLOAD_MAX=${RATE_LIMIT_UPLOAD_MAX}
-              RATE_LIMIT_UPLOAD_WINDOW=${RATE_LIMIT_UPLOAD_WINDOW}
-              EOF
-              chmod 600 /home/azureuser/academico-gateway/.env
-            displayName: 'Create .env file on personal server'
+              : > "$GATEWAY_ENV_FILE"
+              chmod 600 "$GATEWAY_ENV_FILE"
+
+              write_env_var() {
+                printf '%s=%s\n' "$1" "$2" >> "$GATEWAY_ENV_FILE"
+              }
+
+              write_env_var PORT "$PORT"
+              write_env_var NODE_ENV "$NODE_ENV"
+              write_env_var REDIS_PROTOCOL "$REDIS_PROTOCOL"
+              write_env_var REDIS_HOST "$REDIS_HOST"
+              write_env_var REDIS_PORT "$REDIS_PORT"
+              write_env_var REDIS_PASSWORD "$REDIS_PASSWORD"
+              write_env_var USUARIOS_BASE_URL "$USUARIOS_BASE_URL"
+              write_env_var USUARIOS_API_KEY "$USUARIOS_API_KEY"
+              write_env_var CALIFICACIONES_BASE_URL "$CALIFICACIONES_BASE_URL"
+              write_env_var CALIFICACIONES_API_KEY "$CALIFICACIONES_API_KEY"
+              write_env_var CATALOGO_BASE_URL "$CATALOGO_BASE_URL"
+              write_env_var CATALOGO_API_KEY "$CATALOGO_API_KEY"
+              write_env_var MATRICULAS_BASE_URL "$MATRICULAS_BASE_URL"
+              write_env_var MATRICULAS_API_KEY "$MATRICULAS_API_KEY"
+              write_env_var SOLICITUDES_BASE_URL "$SOLICITUDES_BASE_URL"
+              write_env_var SOLICITUDES_API_KEY "$SOLICITUDES_API_KEY"
+              write_env_var GATEWAY_TOKEN_CACHE_TTL "$GATEWAY_TOKEN_CACHE_TTL"
+              write_env_var GATEWAY_WHITELIST_CACHE_TTL "$GATEWAY_WHITELIST_CACHE_TTL"
+              write_env_var ENV "$ENV"
+              write_env_var GRPC_PORT "$GRPC_PORT"
+              write_env_var RATE_LIMIT_IP_ENABLED "$RATE_LIMIT_IP_ENABLED"
+              write_env_var RATE_LIMIT_IP_MAX "$RATE_LIMIT_IP_MAX"
+              write_env_var RATE_LIMIT_IP_WINDOW "$RATE_LIMIT_IP_WINDOW"
+              write_env_var RATE_LIMIT_USER_ENABLED "$RATE_LIMIT_USER_ENABLED"
+              write_env_var RATE_LIMIT_USER_MAX "$RATE_LIMIT_USER_MAX"
+              write_env_var RATE_LIMIT_USER_WINDOW "$RATE_LIMIT_USER_WINDOW"
+              write_env_var RATE_LIMIT_UPLOAD_ENABLED "$RATE_LIMIT_UPLOAD_ENABLED"
+              write_env_var RATE_LIMIT_UPLOAD_MAX "$RATE_LIMIT_UPLOAD_MAX"
+              write_env_var RATE_LIMIT_UPLOAD_WINDOW "$RATE_LIMIT_UPLOAD_WINDOW"
+
+              ssh -i "$SSH_KEY" -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new \
+                "$SSH_TARGET" "mkdir -p '$(productionGatewayPath)'"
+              scp -i "$SSH_KEY" -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new \
+                "$GATEWAY_ENV_FILE" "$SSH_TARGET:$(productionGatewayPath)/.env"
+              ssh -i "$SSH_KEY" -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new \
+                "$SSH_TARGET" "chmod 600 '$(productionGatewayPath)/.env'"
+            displayName: 'Create gateway .env file on production server'
             env:
               PORT: 3000
               NODE_ENV: production
@@ -130,45 +154,89 @@ stages:
               RATE_LIMIT_UPLOAD_WINDOW: $(RATE_LIMIT_UPLOAD_WINDOW)
 
           - script: |
-              echo "Pulling image..."
-              docker pull $(containerRegistry)/$(imageRepository):$(tag)
+              set -euo pipefail
 
-              echo "Stopping old container..."
-              docker rm -f $(containerName) || true
+              SSH_KEY="$(productionSshKey)"
+              SSH_TARGET="$(productionUser)@$(productionHost)"
+              GATEWAY_IMAGE="$(containerRegistry)/$(imageRepository):$(tag)"
 
-              echo "Stopping any container using gateway ports..."
-              PORT_CONTAINERS=$(
-                {
-                  docker ps -q --filter "publish=3000"
-                  docker ps -q --filter "publish=50050"
-                } | sort -u
-              )
+              chmod 600 "$SSH_KEY"
 
-              if [ -n "$PORT_CONTAINERS" ]; then
-                docker rm -f $PORT_CONTAINERS
-              fi
+              ssh -i "$SSH_KEY" -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new \
+                "$SSH_TARGET" \
+                "ACR_NAME='$(acrName)' GATEWAY_IMAGE='$GATEWAY_IMAGE' GATEWAY_DIR='$(productionGatewayPath)' WEB_DIR='$(productionWebPath)' bash -s" <<'REMOTE'
+              set -euo pipefail
 
-              echo "Starting new container..."
-              docker run -d \
-                --name $(containerName) \
-                --restart unless-stopped \
-                -p 3000:3000 \
-                -p 50050:50050 \
-                --env-file /home/azureuser/academico-gateway/.env \
-                -e NODE_ENV=production \
-                $(containerRegistry)/$(imageRepository):$(tag)
+              require_dir() {
+                if [ ! -d "$1/.git" ]; then
+                  echo "Expected Git checkout not found: $1"
+                  exit 1
+                fi
+              }
 
-              echo "Verifying container is running..."
-              sleep 5
-              if ! docker ps --filter "name=^/$(containerName)$" --filter "status=running" --format '{{.Names}}' | grep -qx "$(containerName)"; then
-                echo "Container $(containerName) did not stay running."
-                docker ps -a --filter "name=^/$(containerName)$"
-                docker logs --tail 200 $(containerName) || true
+              update_repo() {
+                local dir="$1"
+                echo "Updating $dir..."
+                cd "$dir"
+                git fetch origin main
+                git pull --ff-only origin main
+              }
+
+              wait_for_container() {
+                local name="$1"
+                local attempts=24
+
+                for attempt in $(seq 1 "$attempts"); do
+                  if docker ps --filter "name=^/${name}$" --filter "status=running" --format '{{.Names}}' | grep -qx "$name"; then
+                    return 0
+                  fi
+                  sleep 5
+                done
+
+                echo "Container $name did not stay running."
+                docker ps -a --filter "name=^/${name}$"
+                docker logs --tail 200 "$name" || true
                 exit 1
-              fi
+              }
 
-              echo "Cleaning up dangling images..."
+              require_dir "$GATEWAY_DIR"
+              require_dir "$WEB_DIR"
+
+              az acr login --name "$ACR_NAME"
+
+              update_repo "$GATEWAY_DIR"
+              update_repo "$WEB_DIR"
+
+              GATEWAY_OVERRIDE="$(mktemp)"
+              trap 'rm -f "$GATEWAY_OVERRIDE"' EXIT
+              cat > "$GATEWAY_OVERRIDE" <<EOF
+              services:
+                academico-gateway:
+                  image: ${GATEWAY_IMAGE}
+              EOF
+
+              echo "Stopping production compose projects..."
+              cd "$WEB_DIR"
+              docker compose down --remove-orphans
+              cd "$GATEWAY_DIR"
+              docker compose -f docker-compose.yml -f "$GATEWAY_OVERRIDE" down --remove-orphans
+
+              echo "Starting gateway from pipeline image..."
+              cd "$GATEWAY_DIR"
+              docker compose -f docker-compose.yml -f "$GATEWAY_OVERRIDE" up -d --pull always --no-build academico-gateway
+
+              echo "Starting web from production checkout..."
+              cd "$WEB_DIR"
+              docker compose up -d --build app
+
+              echo "Verifying production containers..."
+              wait_for_container academico-gateway
+              wait_for_container academico-web-app-1
+
+              docker ps --filter "name=academico-gateway" --filter "name=academico-web-app-1" \
+                --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}'
+
               docker image prune -f
-
-              echo "Deployment completed."
-            displayName: Run container on personal server
+              echo "Production deployment completed."
+              REMOTE
+            displayName: Run production compose deployment
