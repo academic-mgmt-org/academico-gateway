@@ -22,6 +22,7 @@ variables:
   containerName: 'academico-gateway'
   acrName: 'acracademicoutn'
   productionHost: '20.96.156.43'
+  productionMicroservicesHost: '20.115.132.131'
   productionUser: 'azureuser'
   productionSshKey: '/home/azureuser/academico-prod-gateway.pem'
   productionGatewayPath: '/home/azureuser/academico-gateway'
@@ -115,6 +116,12 @@ stages:
               write_env_var RATE_LIMIT_UPLOAD_MAX "$RATE_LIMIT_UPLOAD_MAX"
               write_env_var RATE_LIMIT_UPLOAD_WINDOW "$RATE_LIMIT_UPLOAD_WINDOW"
 
+              MICROSERVICES_HOSTS="$(awk -F'[/:]' '/^(USUARIOS_BASE_URL|CALIFICACIONES_BASE_URL|CATALOGO_BASE_URL|MATRICULAS_BASE_URL|SOLICITUDES_BASE_URL)=/{print $4}' "$GATEWAY_ENV_FILE" | sort -u | paste -sd, -)"
+              if [ "$MICROSERVICES_HOSTS" != "$(productionMicroservicesHost)" ]; then
+                echo "Production microservices host mismatch. Expected $(productionMicroservicesHost), got ${MICROSERVICES_HOSTS:-none}."
+                exit 1
+              fi
+
               ssh -i "$SSH_KEY" -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new \
                 "$SSH_TARGET" "mkdir -p '$(productionGatewayPath)'"
               scp -i "$SSH_KEY" -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new \
@@ -129,15 +136,15 @@ stages:
               REDIS_HOST: $(REDIS_HOST)
               REDIS_PORT: $(REDIS_PORT)
               REDIS_PASSWORD: $(REDIS_PASSWORD)
-              USUARIOS_BASE_URL: $(USUARIOS_BASE_URL)
+              USUARIOS_BASE_URL: http://$(productionMicroservicesHost):3001
               USUARIOS_API_KEY: $(USUARIOS_API_KEY)
-              CALIFICACIONES_BASE_URL: $(CALIFICACIONES_BASE_URL)
+              CALIFICACIONES_BASE_URL: http://$(productionMicroservicesHost):3002
               CALIFICACIONES_API_KEY: $(CALIFICACIONES_API_KEY)
-              CATALOGO_BASE_URL: $(CATALOGO_BASE_URL)
+              CATALOGO_BASE_URL: http://$(productionMicroservicesHost):3003
               CATALOGO_API_KEY: $(CATALOGO_API_KEY)
-              MATRICULAS_BASE_URL: $(MATRICULAS_BASE_URL)
+              MATRICULAS_BASE_URL: http://$(productionMicroservicesHost):3004
               MATRICULAS_API_KEY: $(MATRICULAS_API_KEY)
-              SOLICITUDES_BASE_URL: $(SOLICITUDES_BASE_URL)
+              SOLICITUDES_BASE_URL: http://$(productionMicroservicesHost):3005
               SOLICITUDES_API_KEY: $(SOLICITUDES_API_KEY)
               GATEWAY_TOKEN_CACHE_TTL: $(GATEWAY_TOKEN_CACHE_TTL)
               GATEWAY_WHITELIST_CACHE_TTL: $(GATEWAY_WHITELIST_CACHE_TTL)
