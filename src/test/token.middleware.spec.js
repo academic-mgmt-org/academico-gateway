@@ -45,9 +45,9 @@ describe('TokenMiddleware', () => {
     configService = module.get(ConfigService);
     redisService = module.get(RedisService);
 
-    // Configurar mock de usuarios por defecto para pruebas
-    services.usuarios = {
-      baseUrl: 'http://usuarios.test',
+    // Configurar mock de login por defecto para pruebas
+    services.login = {
+      baseUrl: 'http://login.test',
       apiKey: 'test-api-key'
     };
   });
@@ -106,7 +106,7 @@ describe('TokenMiddleware', () => {
       }
     });
     await middleware.use(req, res, next);
-    expect(mockedAxios.post).toHaveBeenCalledWith('http://usuarios.test/api/v1/auth/validate-token-2', {}, expect.objectContaining({
+    expect(mockedAxios.post).toHaveBeenCalledWith('http://login.test/api/v1/auth/validate-token-2', {}, expect.objectContaining({
       headers: expect.objectContaining({
         authorization: 'Bearer test-token',
         'x-api-key': 'test-api-key'

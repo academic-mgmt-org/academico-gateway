@@ -1,4 +1,8 @@
 export const services = {
+  login: {
+    baseUrl: process.env.LOGIN_BASE_URL || '',
+    apiKey: process.env.LOGIN_API_KEY || ''
+  },
   usuarios: {
     baseUrl: process.env.USUARIOS_BASE_URL || '',
     apiKey: process.env.USUARIOS_API_KEY || ''
@@ -21,9 +25,10 @@ export const services = {
   }
 };
 export const securityValidationMap = {
-  usuarios: 'usuarios',
-  calificaciones: 'usuarios',
-  catalogo: 'usuarios',
-  matriculas: 'usuarios',
-  solicitudes: 'usuarios'
+  login: 'login',
+  usuarios: 'login',
+  calificaciones: 'login',
+  catalogo: 'login',
+  matriculas: 'login',
+  solicitudes: 'login'
 };

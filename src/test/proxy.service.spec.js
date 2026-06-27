@@ -26,7 +26,7 @@ describe('ProxyService', () => {
   });
   it('✅ debe invocar el proxy correctamente para un microservicio registrado (CA1, CA3)', async () => {
     const req = {
-      path: '/usuarios/login',
+      path: '/login/api/v1/auth/login',
       method: 'POST',
       headers: {}
     };
@@ -35,9 +35,9 @@ describe('ProxyService', () => {
     };
 
     // Simular un servicio registrado
-    services.usuarios = {
-      baseUrl: 'http://usuarios.test',
-      apiKey: 'clave-usuarios'
+    services.login = {
+      baseUrl: 'http://login.test',
+      apiKey: 'clave-login'
     };
 
     // Inicializar proxies
@@ -45,7 +45,7 @@ describe('ProxyService', () => {
     await proxyService.processRequest(req, res);
     
     expect(res.from).toHaveBeenCalledWith(
-      'http://usuarios.test/login',
+      'http://login.test/api/v1/auth/login',
       expect.objectContaining({
         rewriteRequestHeaders: expect.any(Function)
       })
@@ -57,7 +57,7 @@ describe('ProxyService', () => {
     const rewrittenHeaders = options.rewriteRequestHeaders(req, originalHeaders);
     expect(rewrittenHeaders).toEqual({
       ...originalHeaders,
-      'x-api-key': 'clave-usuarios'
+      'x-api-key': 'clave-login'
     });
   });
   it('❌ debe lanzar HttpException si la URL no tiene segmentos válidos', async () => {

@@ -34,6 +34,10 @@ export class ProxyService {
   getTimeoutForService(serviceName) {
     // Configuración personalizada por microservicio
     const customTimeouts = {
+      'login': {
+        proxyTimeout: 10000,
+        timeout: 10000
+      },
       'usuarios': {
         proxyTimeout: 10000,
         timeout: 10000

@@ -58,6 +58,8 @@ export class AppModule {
   async loadServicesConfig() {
     // Cargar configuración directamente desde variables de entorno
     // No es necesario cachear en Redis (las env vars ya están en memoria)
+    services.login.baseUrl = this.configService.get('LOGIN_BASE_URL');
+    services.login.apiKey = this.configService.get('LOGIN_API_KEY');
     services.usuarios.baseUrl = this.configService.get('USUARIOS_BASE_URL');
     services.usuarios.apiKey = this.configService.get('USUARIOS_API_KEY');
     services.calificaciones.baseUrl = this.configService.get('CALIFICACIONES_BASE_URL');

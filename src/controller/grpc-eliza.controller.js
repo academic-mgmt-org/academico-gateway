@@ -7,7 +7,7 @@ import { ElizaGrpcClientService } from '../services/eliza-grpc-client.service';
  * Controlador gRPC para el servicio ElizaService.
  * 
  * Recibe llamadas gRPC nativas en el puerto 50050
- * y las reenvía al microservicio academico-usuarios vía ConnectRPC.
+ * y las reenvía al microservicio academico-login vía ConnectRPC.
  * 
  * El package y servicio en el .proto son:
  *   package: eliza.v1

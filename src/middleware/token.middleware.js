@@ -61,8 +61,8 @@ export class TokenMiddleware {
         context: 'TokenMiddleware',
         event: 'security_module_not_found',
         microserviceName
-      }, `❗ No se encontró módulo de seguridad para ${microserviceName}, se usará 'usuarios' por defecto`);
-      securityModuleName = 'usuarios';
+      }, `❗ No se encontró módulo de seguridad para ${microserviceName}, se usará 'login' por defecto`);
+      securityModuleName = 'login';
     }
     const seguridadService = services[securityModuleName];
 
@@ -117,12 +117,12 @@ export class TokenMiddleware {
         return;
       }
 
-      // Si no está en caché, validar con el servicio de usuarios
+      // Si no está en caché, validar con el servicio de login
       this.logger.debug({
         context: 'TokenMiddleware',
         event: 'token_validation_from_service',
         path
-      }, `🔄 Token no en caché, validando con Usuarios...`);
+      }, `🔄 Token no en caché, validando con Login...`);
       const url = `${seguridadService.baseUrl}/api/v1/auth/validate-token-2`;
 
       // Usar agente HTTP con connection pooling para reducir latencia

@@ -17,9 +17,9 @@ La carpeta `docs/` esta preparada para publicarse como Wiki de Azure DevOps usan
 
 El gateway:
 
-- Expone rutas por prefijo de microservicio, por ejemplo `/usuarios/*`, `/catalogo/*`, `/matriculas/*`.
-- Consulta la whitelist publica en `academico-usuarios`.
-- Valida JWT contra `academico-usuarios`.
+- Expone rutas por prefijo de microservicio, por ejemplo `/login/*`, `/usuarios/*`, `/matriculas/*`.
+- Consulta la whitelist publica en `academico-login`.
+- Valida JWT contra `academico-login`.
 - Cachea whitelist y validaciones de token en Redis.
 - Reenvia el request al microservicio destino quitando el prefijo del servicio.
 - Agrega `x-api-key` interna al request redirigido.
@@ -30,6 +30,8 @@ Ver [.env.example](.env.example) para la lista completa de variables.
 
 Variables principales:
 
+- `LOGIN_BASE_URL`
+- `LOGIN_API_KEY`
 - `USUARIOS_BASE_URL`
 - `USUARIOS_API_KEY`
 - `CALIFICACIONES_BASE_URL`
