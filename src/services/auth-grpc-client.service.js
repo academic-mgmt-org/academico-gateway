@@ -63,4 +63,35 @@ export class AuthGrpcClientService {
       passwordEncoding: data.passwordEncoding || data.password_encoding || '',
     });
   }
+
+  async refreshToken(data = {}) {
+    if (!this.client) {
+      throw new Error('Cliente de Auth no inicializado');
+    }
+
+    this.logger.debug({
+      context: 'AuthGrpcClientService',
+      event: 'refresh_token_request',
+    }, '[Auth] Solicitando RefreshToken al microservicio');
+
+    return this.client.refreshToken({
+      refreshToken: data.refreshToken || data.refresh_token || '',
+    });
+  }
+
+  async logout(data = {}) {
+    if (!this.client) {
+      throw new Error('Cliente de Auth no inicializado');
+    }
+
+    this.logger.debug({
+      context: 'AuthGrpcClientService',
+      event: 'logout_request',
+    }, '[Auth] Solicitando Logout al microservicio');
+
+    return this.client.logout({
+      token: data.token || '',
+      refreshToken: data.refreshToken || data.refresh_token || '',
+    });
+  }
 }

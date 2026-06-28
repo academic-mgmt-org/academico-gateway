@@ -65,4 +65,87 @@ export class GrpcAuthController {
       });
     }
   }
+
+  @GrpcMethod('AuthService', 'RefreshToken')
+  async refreshToken(data) {
+    this.logger.log({
+      context: 'GrpcAuthController',
+      event: 'refresh_token_call',
+    }, '[gRPC] RefreshToken llamado');
+
+    try {
+      const response = await this.authClient.refreshToken({
+        refreshToken: data?.refreshToken || data?.refresh_token,
+      });
+
+      this.logger.log({
+        context: 'GrpcAuthController',
+        event: 'refresh_token_success',
+      }, '[gRPC] RefreshToken exitoso');
+
+      return {
+        accessToken: response.accessToken,
+        refreshToken: response.refreshToken,
+        mfaRequired: response.mfaRequired,
+        requiresAppUpdate: response.requiresAppUpdate,
+        tokenType: response.tokenType,
+        expiresIn: response.expiresIn,
+        sessionId: response.sessionId,
+        access_token: response.accessToken,
+        refresh_token: response.refreshToken,
+        mfa_required: response.mfaRequired,
+        requires_app_update: response.requiresAppUpdate,
+        token_type: response.tokenType,
+        expires_in: response.expiresIn,
+        session_id: response.sessionId,
+      };
+    } catch (error) {
+      this.logger.error({
+        context: 'GrpcAuthController',
+        event: 'refresh_token_error',
+        error: error.message,
+      }, `[gRPC] Error en RefreshToken: ${error.message}`);
+
+      throw new RpcException({
+        code: error.code !== undefined ? error.code : 13,
+        message: error.rawMessage || error.message,
+      });
+    }
+  }
+
+  @GrpcMethod('AuthService', 'Logout')
+  async logout(data) {
+    this.logger.log({
+      context: 'GrpcAuthController',
+      event: 'logout_call',
+    }, '[gRPC] Logout llamado');
+
+    try {
+      const response = await this.authClient.logout({
+        token: data?.token,
+        refreshToken: data?.refreshToken || data?.refresh_token,
+      });
+
+      this.logger.log({
+        context: 'GrpcAuthController',
+        event: 'logout_success',
+      }, '[gRPC] Logout exitoso');
+
+      return {
+        success: Boolean(response.success),
+        message: response.message || '',
+      };
+    } catch (error) {
+      this.logger.error({
+        context: 'GrpcAuthController',
+        event: 'logout_error',
+        error: error.message,
+      }, `[gRPC] Error en Logout: ${error.message}`);
+
+      throw new RpcException({
+        code: error.code !== undefined ? error.code : 13,
+        message: error.rawMessage || error.message,
+      });
+    }
+  }
 }
