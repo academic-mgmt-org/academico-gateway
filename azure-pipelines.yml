@@ -92,6 +92,8 @@ stages:
               write_env_var REDIS_HOST "$REDIS_HOST"
               write_env_var REDIS_PORT "$REDIS_PORT"
               write_env_var REDIS_PASSWORD "$REDIS_PASSWORD"
+              write_env_var LOGIN_BASE_URL "$LOGIN_BASE_URL"
+              write_env_var LOGIN_API_KEY "$LOGIN_API_KEY"
               write_env_var USUARIOS_BASE_URL "$USUARIOS_BASE_URL"
               write_env_var USUARIOS_API_KEY "$USUARIOS_API_KEY"
               write_env_var CALIFICACIONES_BASE_URL "$CALIFICACIONES_BASE_URL"
@@ -116,7 +118,7 @@ stages:
               write_env_var RATE_LIMIT_UPLOAD_MAX "$RATE_LIMIT_UPLOAD_MAX"
               write_env_var RATE_LIMIT_UPLOAD_WINDOW "$RATE_LIMIT_UPLOAD_WINDOW"
 
-              MICROSERVICES_HOSTS="$(awk -F'[/:]' '/^(USUARIOS_BASE_URL|CALIFICACIONES_BASE_URL|CATALOGO_BASE_URL|MATRICULAS_BASE_URL|SOLICITUDES_BASE_URL)=/{print $4}' "$GATEWAY_ENV_FILE" | sort -u | paste -sd, -)"
+              MICROSERVICES_HOSTS="$(awk -F'[/:]' '/^(LOGIN_BASE_URL|USUARIOS_BASE_URL|CALIFICACIONES_BASE_URL|CATALOGO_BASE_URL|MATRICULAS_BASE_URL|SOLICITUDES_BASE_URL)=/{print $4}' "$GATEWAY_ENV_FILE" | sort -u | paste -sd, -)"
               if [ "$MICROSERVICES_HOSTS" != "$(productionMicroservicesHost)" ]; then
                 echo "Production microservices host mismatch. Expected $(productionMicroservicesHost), got ${MICROSERVICES_HOSTS:-none}."
                 exit 1
@@ -136,7 +138,9 @@ stages:
               REDIS_HOST: $(REDIS_HOST)
               REDIS_PORT: $(REDIS_PORT)
               REDIS_PASSWORD: $(REDIS_PASSWORD)
-              USUARIOS_BASE_URL: http://$(productionMicroservicesHost):3001
+              LOGIN_BASE_URL: http://$(productionMicroservicesHost):3001
+              LOGIN_API_KEY: $(LOGIN_API_KEY)
+              USUARIOS_BASE_URL: http://$(productionMicroservicesHost):3006
               USUARIOS_API_KEY: $(USUARIOS_API_KEY)
               CALIFICACIONES_BASE_URL: http://$(productionMicroservicesHost):3002
               CALIFICACIONES_API_KEY: $(CALIFICACIONES_API_KEY)

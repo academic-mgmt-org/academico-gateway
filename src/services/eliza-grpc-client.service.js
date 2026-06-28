@@ -6,7 +6,7 @@ import { ElizaService } from '../gen/eliza_pb.js';
 import { services } from '../config/services.config';
 
 /**
- * Cliente gRPC/ConnectRPC para el microservicio academico-usuarios (ElizaService).
+ * Cliente gRPC/ConnectRPC para el microservicio academico-login (ElizaService).
  * 
  * Usa el protocolo Connect (HTTP/2) para comunicarse con el microservicio,
  * que a su vez usa fastifyConnectPlugin.
@@ -21,22 +21,22 @@ export class ElizaGrpcClientService {
   }
 
   onModuleInit() {
-    const usuariosConfig = services.usuarios;
+    const loginConfig = services.login;
 
-    if (!usuariosConfig || !usuariosConfig.baseUrl) {
+    if (!loginConfig || !loginConfig.baseUrl) {
       this.logger.warn({
         context: 'ElizaGrpcClientService',
         event: 'client_not_configured',
-      }, '⚠️ USUARIOS_BASE_URL no configurada, cliente gRPC de Eliza no inicializado');
+      }, '⚠️ LOGIN_BASE_URL no configurada, cliente gRPC de Eliza no inicializado');
       return;
     }
 
     const transport = createConnectTransport({
-      baseUrl: usuariosConfig.baseUrl,
+      baseUrl: loginConfig.baseUrl,
       httpVersion: '2',
       interceptors: [
         (next) => async (req) => {
-          req.header.set('x-api-key', usuariosConfig.apiKey);
+          req.header.set('x-api-key', loginConfig.apiKey);
           return await next(req);
         },
       ],
@@ -47,8 +47,8 @@ export class ElizaGrpcClientService {
     this.logger.log({
       context: 'ElizaGrpcClientService',
       event: 'client_initialized',
-      baseUrl: usuariosConfig.baseUrl,
-    }, `✅ Cliente ConnectRPC de Eliza inicializado -> ${usuariosConfig.baseUrl}`);
+      baseUrl: loginConfig.baseUrl,
+    }, `✅ Cliente ConnectRPC de Eliza inicializado -> ${loginConfig.baseUrl}`);
   }
 
   /**
