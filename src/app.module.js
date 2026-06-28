@@ -19,8 +19,8 @@ import { AdminController } from './controller/admin.controller';
 import { ConnectMiddleware } from './middleware/connect.middleware';
 import { GrpcCatalogoController } from './controller/grpc-catalogo.controller';
 import { CatalogoGrpcClientService } from './services/catalogo-grpc-client.service';
-import { GrpcElizaController } from './controller/grpc-eliza.controller';
-import { ElizaGrpcClientService } from './services/eliza-grpc-client.service';
+import { GrpcAuthController } from './controller/grpc-auth.controller';
+import { AuthGrpcClientService } from './services/auth-grpc-client.service';
 @Module({
   imports: [
   // ⚠️ IMPORTANTE: LoggerModule DEBE ir PRIMERO
@@ -31,8 +31,8 @@ import { ElizaGrpcClientService } from './services/eliza-grpc-client.service';
   })],
   // ⚠️ ORDEN IMPORTANTE: HealthController DEBE ir ANTES que ProxyController
   // Esto asegura que las rutas /api/* no sean capturadas por el comodín * de ProxyController
-  controllers: [HealthController, AdminController, GrpcCatalogoController, GrpcElizaController],
-  providers: [RedisService, Logger, CatalogoGrpcClientService, ElizaGrpcClientService,
+  controllers: [HealthController, AdminController, GrpcCatalogoController, GrpcAuthController],
+  providers: [RedisService, Logger, CatalogoGrpcClientService, AuthGrpcClientService,
   // ═══════════════════════════════════════════════════════════
   // FILTRO GLOBAL DE EXCEPCIONES
   // ═══════════════════════════════════════════════════════════
@@ -80,7 +80,7 @@ export class AppModule {
     }, '✅ Configuración de microservicios académicos cargada desde .env');
   }
   configure(consumer) {
-    // 0. ConnectRPC Middleware (para endpoints RPC de Eliza)
+    // 0. ConnectRPC Middleware (para endpoints RPC de Auth)
     consumer.apply(ConnectMiddleware).forRoutes('*');
 
     // ═══════════════════════════════════════════════════════════
@@ -102,7 +102,7 @@ export class AppModule {
       '/api/ready',
       '/api/live',
       '/api/(.*)',
-      '/eliza.v1.ElizaService/(.*)'
+      '/auth.v1.AuthService/(.*)'
     ).forRoutes('*');
 
     // ═══════════════════════════════════════════════════════════
