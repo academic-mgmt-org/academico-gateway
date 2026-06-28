@@ -70,6 +70,8 @@ export class AppModule {
     services.matriculas.apiKey = this.configService.get('MATRICULAS_API_KEY');
     services.solicitudes.baseUrl = this.configService.get('SOLICITUDES_BASE_URL');
     services.solicitudes.apiKey = this.configService.get('SOLICITUDES_API_KEY');
+    services.notificaciones.baseUrl = this.configService.get('NOTIFICACIONES_BASE_URL');
+    services.notificaciones.apiKey = this.configService.get('NOTIFICACIONES_API_KEY');
     this.logger.log({
       context: 'AppModule',
       event: 'services_config_loaded',

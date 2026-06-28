@@ -22,6 +22,10 @@ export const services = {
   solicitudes: {
     baseUrl: process.env.SOLICITUDES_BASE_URL || '',
     apiKey: process.env.SOLICITUDES_API_KEY || ''
+  },
+  notificaciones: {
+    baseUrl: process.env.NOTIFICACIONES_BASE_URL || '',
+    apiKey: process.env.NOTIFICACIONES_API_KEY || ''
   }
 };
 export const securityValidationMap = {
@@ -30,5 +34,6 @@ export const securityValidationMap = {
   calificaciones: 'login',
   catalogo: 'login',
   matriculas: 'login',
-  solicitudes: 'login'
+  solicitudes: 'login',
+  notificaciones: 'login'
 };

@@ -65,7 +65,22 @@ export class RedisService {
       return null;
     }
     const data = await this.redisClient.get(key);
-    return data ? JSON.parse(data) : null;
+    if (!data) {
+      return null;
+    }
+    try {
+      return JSON.parse(data);
+    } catch {
+      return data;
+    }
+  }
+
+  async ping() {
+    if (!this.redisClient) {
+      return false;
+    }
+    const result = await this.redisClient.ping();
+    return result === 'PONG';
   }
   async set(key, value, ttl) {
     if (!this.redisClient) {
