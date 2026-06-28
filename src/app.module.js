@@ -58,6 +58,8 @@ export class AppModule {
   async loadServicesConfig() {
     // Cargar configuración directamente desde variables de entorno
     // No es necesario cachear en Redis (las env vars ya están en memoria)
+    services.login.baseUrl = this.configService.get('LOGIN_BASE_URL');
+    services.login.apiKey = this.configService.get('LOGIN_API_KEY');
     services.usuarios.baseUrl = this.configService.get('USUARIOS_BASE_URL');
     services.usuarios.apiKey = this.configService.get('USUARIOS_API_KEY');
     services.calificaciones.baseUrl = this.configService.get('CALIFICACIONES_BASE_URL');
@@ -68,6 +70,8 @@ export class AppModule {
     services.matriculas.apiKey = this.configService.get('MATRICULAS_API_KEY');
     services.solicitudes.baseUrl = this.configService.get('SOLICITUDES_BASE_URL');
     services.solicitudes.apiKey = this.configService.get('SOLICITUDES_API_KEY');
+    services.notificaciones.baseUrl = this.configService.get('NOTIFICACIONES_BASE_URL');
+    services.notificaciones.apiKey = this.configService.get('NOTIFICACIONES_API_KEY');
     this.logger.log({
       context: 'AppModule',
       event: 'services_config_loaded',

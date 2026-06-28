@@ -29,7 +29,7 @@ async function bootstrap() {
   const logger = app.get(Logger);
 
   // Registrar proxy nativo de Fastify para cada microservicio
-  const microservices = ['usuarios', 'calificaciones', 'catalogo', 'matriculas', 'solicitudes'];
+  const microservices = ['login', 'usuarios', 'calificaciones', 'catalogo', 'matriculas', 'solicitudes', 'notificaciones'];
   for (const name of microservices) {
     const serviceConfig = services[name];
     if (serviceConfig && serviceConfig.baseUrl) {
@@ -54,7 +54,8 @@ async function bootstrap() {
   // por lo que usamos @fastify/reply-from con rutas explícitas.
   const grpcServiceMap = {
     'catalogo.v1.CatalogoService': services.catalogo,
-    'eliza.v1.ElizaService': services.usuarios,
+    'eliza.v1.ElizaService': services.login,
+    'notificaciones.v1.NotificationService': services.notificaciones,
   };
 
   for (const [packagePath, serviceConfig] of Object.entries(grpcServiceMap)) {

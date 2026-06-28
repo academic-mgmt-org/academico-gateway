@@ -52,8 +52,10 @@ export class HealthController {
     // Verificar conexión a Redis
     let redisStatus = 'unknown';
     try {
-      // Intenta hacer un PING a Redis
-      await this.redisService.get('health_check_test');
+      const redisAlive = await this.redisService.ping();
+      if (!redisAlive) {
+        throw new Error('Redis PING no respondio PONG');
+      }
       redisStatus = 'connected';
     } catch (error) {
       redisStatus = 'disconnected';
