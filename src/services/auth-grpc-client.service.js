@@ -79,6 +79,22 @@ export class AuthGrpcClientService {
     });
   }
 
+  async forgotPassword(data = {}) {
+    if (!this.client) {
+      throw new Error('Cliente de Auth no inicializado');
+    }
+
+    this.logger.debug({
+      context: 'AuthGrpcClientService',
+      event: 'forgot_password_request',
+      email: data.email || '',
+    }, '[Auth] Solicitando ForgotPassword al microservicio');
+
+    return this.client.forgotPassword({
+      email: data.email || '',
+    });
+  }
+
   async logout(data = {}) {
     if (!this.client) {
       throw new Error('Cliente de Auth no inicializado');

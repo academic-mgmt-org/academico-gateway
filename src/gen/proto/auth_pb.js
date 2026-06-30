@@ -8,7 +8,7 @@ import { fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2
  * Describes the file proto/auth.proto.
  */
 export const file_proto_auth = /*@__PURE__*/
-  fileDesc("ChBwcm90by9hdXRoLnByb3RvEgdhdXRoLnYxImIKDExvZ2luUmVxdWVzdBIQCgh1c2VybmFtZRgBIAEoCRIQCghwYXNzd29yZBgCIAEoCRITCgthcHBfdmVyc2lvbhgDIAEoCRIZChFwYXNzd29yZF9lbmNvZGluZxgEIAEoCSKrAQoNTG9naW5SZXNwb25zZRIUCgxhY2Nlc3NfdG9rZW4YASABKAkSFQoNcmVmcmVzaF90b2tlbhgCIAEoCRIUCgxtZmFfcmVxdWlyZWQYAyABKAgSGwoTcmVxdWlyZXNfYXBwX3VwZGF0ZRgEIAEoCBISCgp0b2tlbl90eXBlGAUgASgJEhIKCmV4cGlyZXNfaW4YBiABKAUSEgoKc2Vzc2lvbl9pZBgHIAEoCSIsChNSZWZyZXNoVG9rZW5SZXF1ZXN0EhUKDXJlZnJlc2hfdG9rZW4YASABKAkiJQoUVmFsaWRhdGVUb2tlblJlcXVlc3QSDQoFdG9rZW4YASABKAkifwoVVmFsaWRhdGVUb2tlblJlc3BvbnNlEhAKCGlzX3ZhbGlkGAEgASgIEhIKCmlkZW50aWZpZXIYAiABKAkSDQoFZW1haWwYAyABKAkSEgoKc2Vzc2lvbl9pZBgEIAEoCRIPCgd1c2VyX2lkGAUgASgJEgwKBHJvbGUYBiABKAkiNQoNTG9nb3V0UmVxdWVzdBINCgV0b2tlbhgBIAEoCRIVCg1yZWZyZXNoX3Rva2VuGAIgASgJIjMKD0dlbmVyaWNSZXNwb25zZRIPCgdzdWNjZXNzGAEgASgIEg8KB21lc3NhZ2UYAiABKAkynwIKC0F1dGhTZXJ2aWNlEjgKBUxvZ2luEhUuYXV0aC52MS5Mb2dpblJlcXVlc3QaFi5hdXRoLnYxLkxvZ2luUmVzcG9uc2UiABJGCgxSZWZyZXNoVG9rZW4SHC5hdXRoLnYxLlJlZnJlc2hUb2tlblJlcXVlc3QaFi5hdXRoLnYxLkxvZ2luUmVzcG9uc2UiABJQCg1WYWxpZGF0ZVRva2VuEh0uYXV0aC52MS5WYWxpZGF0ZVRva2VuUmVxdWVzdBoeLmF1dGgudjEuVmFsaWRhdGVUb2tlblJlc3BvbnNlIgASPAoGTG9nb3V0EhYuYXV0aC52MS5Mb2dvdXRSZXF1ZXN0GhguYXV0aC52MS5HZW5lcmljUmVzcG9uc2UiAGIGcHJvdG8z");
+  fileDesc("ChBwcm90by9hdXRoLnByb3RvEgdhdXRoLnYxImIKDExvZ2luUmVxdWVzdBIQCgh1c2VybmFtZRgBIAEoCRIQCghwYXNzd29yZBgCIAEoCRITCgthcHBfdmVyc2lvbhgDIAEoCRIZChFwYXNzd29yZF9lbmNvZGluZxgEIAEoCSKrAQoNTG9naW5SZXNwb25zZRIUCgxhY2Nlc3NfdG9rZW4YASABKAkSFQoNcmVmcmVzaF90b2tlbhgCIAEoCRIUCgxtZmFfcmVxdWlyZWQYAyABKAgSGwoTcmVxdWlyZXNfYXBwX3VwZGF0ZRgEIAEoCBISCgp0b2tlbl90eXBlGAUgASgJEhIKCmV4cGlyZXNfaW4YBiABKAUSEgoKc2Vzc2lvbl9pZBgHIAEoCSIsChNSZWZyZXNoVG9rZW5SZXF1ZXN0EhUKDXJlZnJlc2hfdG9rZW4YASABKAkiJgoVRm9yZ290UGFzc3dvcmRSZXF1ZXN0Eg0KBWVtYWlsGAEgASgJIiUKFFZhbGlkYXRlVG9rZW5SZXF1ZXN0Eg0KBXRva2VuGAEgASgJIn8KFVZhbGlkYXRlVG9rZW5SZXNwb25zZRIQCghpc192YWxpZBgBIAEoCBISCgppZGVudGlmaWVyGAIgASgJEg0KBWVtYWlsGAMgASgJEhIKCnNlc3Npb25faWQYBCABKAkSDwoHdXNlcl9pZBgFIAEoCRIMCgRyb2xlGAYgASgJIjUKDUxvZ291dFJlcXVlc3QSDQoFdG9rZW4YASABKAkSFQoNcmVmcmVzaF90b2tlbhgCIAEoCSIzCg9HZW5lcmljUmVzcG9uc2USDwoHc3VjY2VzcxgBIAEoCBIPCgdtZXNzYWdlGAIgASgJMu0CCgtBdXRoU2VydmljZRI4CgVMb2dpbhIVLmF1dGgudjEuTG9naW5SZXF1ZXN0GhYuYXV0aC52MS5Mb2dpblJlc3BvbnNlIgASRgoMUmVmcmVzaFRva2VuEhwuYXV0aC52MS5SZWZyZXNoVG9rZW5SZXF1ZXN0GhYuYXV0aC52MS5Mb2dpblJlc3BvbnNlIgASTAoORm9yZ290UGFzc3dvcmQSHi5hdXRoLnYxLkZvcmdvdFBhc3N3b3JkUmVxdWVzdBoYLmF1dGgudjEuR2VuZXJpY1Jlc3BvbnNlIgASUAoNVmFsaWRhdGVUb2tlbhIdLmF1dGgudjEuVmFsaWRhdGVUb2tlblJlcXVlc3QaHi5hdXRoLnYxLlZhbGlkYXRlVG9rZW5SZXNwb25zZSIAEjwKBkxvZ291dBIWLmF1dGgudjEuTG9nb3V0UmVxdWVzdBoYLmF1dGgudjEuR2VuZXJpY1Jlc3BvbnNlIgBiBnByb3RvMw");
 
 /**
  * Describes the message auth.v1.LoginRequest.
@@ -32,32 +32,39 @@ export const RefreshTokenRequestSchema = /*@__PURE__*/
   messageDesc(file_proto_auth, 2);
 
 /**
+ * Describes the message auth.v1.ForgotPasswordRequest.
+ * Use `create(ForgotPasswordRequestSchema)` to create a new message.
+ */
+export const ForgotPasswordRequestSchema = /*@__PURE__*/
+  messageDesc(file_proto_auth, 3);
+
+/**
  * Describes the message auth.v1.ValidateTokenRequest.
  * Use `create(ValidateTokenRequestSchema)` to create a new message.
  */
 export const ValidateTokenRequestSchema = /*@__PURE__*/
-  messageDesc(file_proto_auth, 3);
+  messageDesc(file_proto_auth, 4);
 
 /**
  * Describes the message auth.v1.ValidateTokenResponse.
  * Use `create(ValidateTokenResponseSchema)` to create a new message.
  */
 export const ValidateTokenResponseSchema = /*@__PURE__*/
-  messageDesc(file_proto_auth, 4);
+  messageDesc(file_proto_auth, 5);
 
 /**
  * Describes the message auth.v1.LogoutRequest.
  * Use `create(LogoutRequestSchema)` to create a new message.
  */
 export const LogoutRequestSchema = /*@__PURE__*/
-  messageDesc(file_proto_auth, 5);
+  messageDesc(file_proto_auth, 6);
 
 /**
  * Describes the message auth.v1.GenericResponse.
  * Use `create(GenericResponseSchema)` to create a new message.
  */
 export const GenericResponseSchema = /*@__PURE__*/
-  messageDesc(file_proto_auth, 6);
+  messageDesc(file_proto_auth, 7);
 
 /**
  * @generated from service auth.v1.AuthService

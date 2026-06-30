@@ -22,6 +22,10 @@ message RefreshTokenRequest {
   string refresh_token = 1;
 }
 
+message ForgotPasswordRequest {
+  string email = 1;
+}
+
 message ValidateTokenRequest {
   string token = 1;
 }
@@ -48,6 +52,7 @@ message GenericResponse {
 service AuthService {
   rpc Login(LoginRequest) returns (LoginResponse) {}
   rpc RefreshToken(RefreshTokenRequest) returns (LoginResponse) {}
+  rpc ForgotPassword(ForgotPasswordRequest) returns (GenericResponse) {}
   rpc ValidateToken(ValidateTokenRequest) returns (ValidateTokenResponse) {}
   rpc Logout(LogoutRequest) returns (GenericResponse) {}
 }

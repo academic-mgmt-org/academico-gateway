@@ -113,6 +113,44 @@ export class GrpcAuthController {
     }
   }
 
+  @GrpcMethod('AuthService', 'ForgotPassword')
+  async forgotPassword(data) {
+    this.logger.log({
+      context: 'GrpcAuthController',
+      event: 'forgot_password_call',
+      email: data?.email || null,
+    }, '[gRPC] ForgotPassword llamado');
+
+    try {
+      const response = await this.authClient.forgotPassword({
+        email: data?.email,
+      });
+
+      this.logger.log({
+        context: 'GrpcAuthController',
+        event: 'forgot_password_success',
+        email: data?.email || null,
+      }, '[gRPC] ForgotPassword exitoso');
+
+      return {
+        success: Boolean(response.success),
+        message: response.message || '',
+      };
+    } catch (error) {
+      this.logger.error({
+        context: 'GrpcAuthController',
+        event: 'forgot_password_error',
+        email: data?.email || null,
+        error: error.message,
+      }, `[gRPC] Error en ForgotPassword: ${error.message}`);
+
+      throw new RpcException({
+        code: error.code !== undefined ? error.code : 13,
+        message: error.rawMessage || error.message,
+      });
+    }
+  }
+
   @GrpcMethod('AuthService', 'Logout')
   async logout(data) {
     this.logger.log({
