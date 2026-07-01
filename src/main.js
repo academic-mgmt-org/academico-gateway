@@ -20,10 +20,11 @@ async function bootstrap() {
   app.connectMicroservice({
     transport: Transport.GRPC,
     options: {
-      package: ['catalogo.v1', 'auth.v1'],
+      package: ['catalogo.v1', 'auth.v1', 'notificaciones.v1'],
       protoPath: [
         join(__dirname, 'proto/catalogo/v1/catalogo.proto'),
         join(__dirname, 'proto/auth.proto'),
+        join(__dirname, 'proto/notificaciones/v1/notificaciones.proto'),
       ],
       url: `0.0.0.0:${grpcPort}`,
       onLoadPackageDefinition: (pkg, server) => {

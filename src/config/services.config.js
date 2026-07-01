@@ -6,6 +6,10 @@ export const services = {
   catalogo: {
     baseUrl: process.env.CATALOGO_BASE_URL || '',
     apiKey: process.env.CATALOGO_API_KEY || ''
+  },
+  notificaciones: {
+    baseUrl: process.env.NOTIFICACIONES_BASE_URL || '',
+    apiKey: process.env.NOTIFICACIONES_API_KEY || ''
   }
 };
 
