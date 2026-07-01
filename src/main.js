@@ -16,9 +16,7 @@ async function bootstrap() {
   // Esto permite que Pino capture logs ANTES de que el logger esté configurado
   const app = await NestFactory.create(
     AppModule,
-    new FastifyAdapter({
-      http2: true
-    }),
+    new FastifyAdapter(),
     {
       bufferLogs: true,
       bodyParser: false
@@ -56,6 +54,7 @@ async function bootstrap() {
     'catalogo.v1.CatalogoService': services.catalogo,
     'auth.v1.AuthService': services.login,
     'notificaciones.v1.NotificationService': services.notificaciones,
+    'notificaciones.v1.EmailService': services.notificaciones,
   };
 
   for (const [packagePath, serviceConfig] of Object.entries(grpcServiceMap)) {
@@ -64,14 +63,17 @@ async function bootstrap() {
     // Cada servicio gRPC se registra en su propio scope encapsulado
     // para poder tener un @fastify/reply-from con un `base` diferente
     await fastifyInstance.register(async function grpcProxyPlugin(fastify) {
-      // Agregar content-type parser para application/grpc
-      // Fastify no reconoce este content-type por defecto y devuelve 415
-      fastify.addContentTypeParser('application/grpc', function (request, payload, done) {
+      // Fastify no reconoce por defecto los content-types binarios usados por
+      // gRPC y ConnectRPC, y devuelve 415 si no se registran aqui.
+      const parseRawBody = function (request, payload, done) {
         const chunks = [];
         payload.on('data', chunk => chunks.push(chunk));
         payload.on('end', () => done(null, Buffer.concat(chunks)));
         payload.on('error', done);
-      });
+      };
+      fastify.addContentTypeParser('application/grpc', parseRawBody);
+      fastify.addContentTypeParser('application/proto', parseRawBody);
+      fastify.addContentTypeParser('application/connect+proto', parseRawBody);
 
       await fastify.register(replyFrom, {
         base: serviceConfig.baseUrl,
