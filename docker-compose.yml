@@ -1,0 +1,19 @@
+services:
+  academico-gateway:
+    build:
+      context: .
+    image: academico-gateway:local
+    container_name: academico-gateway
+    restart: always
+    ports:
+      - "${GRPC_PORT:-50050}:${GRPC_PORT:-50050}"
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+    networks:
+      - academico-backend
+
+networks:
+  academico-backend:
+    external: true
