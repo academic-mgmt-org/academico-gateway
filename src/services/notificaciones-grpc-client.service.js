@@ -46,6 +46,10 @@ export class NotificacionesGrpcClientService {
 
   async sendEmail(data = {}) {
     if (!this.client) {
+      this.onModuleInit();
+    }
+
+    if (!this.client) {
       throw new Error('Cliente de notificaciones no inicializado');
     }
 

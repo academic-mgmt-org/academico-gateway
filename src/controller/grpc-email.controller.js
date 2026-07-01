@@ -13,7 +13,7 @@ export class GrpcEmailController {
     this.logger = logger;
   }
 
-  @GrpcMethod('EmailService', 'SendEmail')
+  @GrpcMethod('notificaciones.v1.EmailService', 'SendEmail')
   async sendEmail(data) {
     this.logger.log({
       context: 'GrpcEmailController',
