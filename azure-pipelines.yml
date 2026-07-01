@@ -233,7 +233,9 @@ stages:
         echo "Development deployment completed."
         REMOTE_SCRIPT
 
-        if command -v grpcurl >/dev/null 2>&1; then
+        if [ -z "${PUBLIC_GRPC_HOST:-}" ]; then
+          echo "PUBLIC_GRPC_HOST is not set; skipping public descriptor check."
+        elif command -v grpcurl >/dev/null 2>&1; then
           echo "Checking gRPC descriptor on development endpoint..."
           for attempt in $(seq 1 12); do
             if grpcurl -plaintext "${PUBLIC_GRPC_HOST}:${GATEWAY_GRPC_PORT}" describe auth.v1.AuthService 2>/tmp/gateway-grpcurl.err | grep -q 'ResetPassword'; then
@@ -245,9 +247,9 @@ stages:
           cat /tmp/gateway-grpcurl.err || true
           echo "ResetPassword was not found on development gateway."
           exit 1
+        else
+          echo "grpcurl is not installed on the deploy agent; skipping descriptor check."
         fi
-
-        echo "grpcurl is not installed on the deploy agent; skipping descriptor check."
       displayName: Deploy academico-gateway to development
       env:
         CONTAINER_REGISTRY: $(containerRegistry)
@@ -459,7 +461,9 @@ stages:
         echo "Production deployment completed."
         REMOTE_SCRIPT
 
-        if command -v grpcurl >/dev/null 2>&1; then
+        if [ -z "${PUBLIC_GRPC_HOST:-}" ]; then
+          echo "PUBLIC_GRPC_HOST is not set; skipping public descriptor check."
+        elif command -v grpcurl >/dev/null 2>&1; then
           echo "Checking gRPC descriptor on production endpoint..."
           for attempt in $(seq 1 12); do
             if grpcurl -plaintext "${PUBLIC_GRPC_HOST}:${GATEWAY_GRPC_PORT}" describe auth.v1.AuthService 2>/tmp/gateway-grpcurl.err | grep -q 'ResetPassword'; then
@@ -471,9 +475,9 @@ stages:
           cat /tmp/gateway-grpcurl.err || true
           echo "ResetPassword was not found on production gateway."
           exit 1
+        else
+          echo "grpcurl is not installed on the deploy agent; skipping descriptor check."
         fi
-
-        echo "grpcurl is not installed on the deploy agent; skipping descriptor check."
       displayName: Deploy academico-gateway to production
       env:
         CONTAINER_REGISTRY: $(containerRegistry)
@@ -493,4 +497,3 @@ stages:
         LOGIN_BASE_URL: http://$(prodMicroservicesHost):3001
         CATALOGO_BASE_URL: http://$(prodMicroservicesHost):3003
         GATEWAY_GRPC_PORT: $(grpcPort)
-        PUBLIC_GRPC_HOST: $(prodSshHost)
