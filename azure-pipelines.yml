@@ -1,46 +1,59 @@
 # Docker
-# Build and push an image to Azure Container Registry
+# Build, publish and deploy academico-gateway image to Azure development and production servers.
 
 trigger:
-- main
+  branches:
+    include:
+    - main
+
+pr: none
 
 resources:
 - repo: self
 
 variables:
-  # Container registry service connection established during pipeline creation
   dockerRegistryServiceConnection: '5cffc302-0a35-4b2b-8ea1-04a9ebd67c07'
   imageRepository: 'academicmgmtorgacademicogateway'
   containerRegistry: 'acracademicoutn.azurecr.io'
   dockerfilePath: '$(Build.SourcesDirectory)/Dockerfile'
   tag: '$(Build.BuildId)'
-
-  # Agent VM image name
   vmImageName: 'ubuntu-latest'
+  selfHostedPool: 'Default'
 
-  # Container name on your personal server
+  serviceName: 'academico-gateway'
   containerName: 'academico-gateway'
-  acrName: 'acracademicoutn'
-  productionHost: '20.96.156.43'
-  productionMicroservicesHost: '20.115.132.131'
-  productionUser: 'azureuser'
-  productionSshKey: '/home/azureuser/academico-prod-gateway.pem'
-  productionGatewayPath: '/home/azureuser/academico-gateway'
-  productionWebPath: '/home/azureuser/academico-web'
-  productionApproverUser: 'Guytho1996'
+  composeFile: 'docker-compose.yml'
+  grpcPort: '50050'
+  sshUser: 'azureuser'
+
+  devSshHost: '20.122.210.230'
+  devGatewayHost: 'academia-dev.eastus2.cloudapp.azure.com'
+  devMicroservicesHost: '20.114.139.164'
+  devGatewayPath: '/home/azureuser/academico-gateway'
+  devSshKey: '/home/azureuser/CREDENCIALES/academico-dev-gateway.pem'
+  devSshKeyFallback: '/home/azureuser/academico-dev-gateway.pem'
+
+  prodSshHost: '20.96.156.43'
+  prodGatewayHost: 'academia-utn.eastus2.cloudapp.azure.com'
+  prodMicroservicesHost: '20.115.132.131'
+  prodGatewayPath: '/home/azureuser/academico-gateway'
+  prodSshKey: '/home/azureuser/academico-prod-gateway.pem'
+  prodSshKeyFallback: '/home/azureuser/CREDENCIALES/academico-prod-gateway.pem'
+
   productionApprover: 'gacalderonr@utn.edu.ec'
 
 stages:
 - stage: Build
-  displayName: Build and push stage
+  displayName: Build and push gateway image
+  condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'), ne(variables['Build.Reason'], 'PullRequest'))
   jobs:
   - job: Build
-    displayName: Build
+    displayName: Build and push
     pool:
       vmImage: $(vmImageName)
     steps:
     - task: Docker@2
-      displayName: Build and push an image to container registry
+      displayName: Build and push image to ACR
       inputs:
         command: buildAndPush
         repository: $(imageRepository)
@@ -48,156 +61,437 @@ stages:
         containerRegistry: $(dockerRegistryServiceConnection)
         tags: |
           $(tag)
+          latest
         addPipelineData: false
 
-- stage: DeployProduction
-  displayName: Deploy to production
+- stage: DeployDevelopment
+  displayName: Deploy to development server 20.122.210.230
   dependsOn: Build
   condition: succeeded()
   jobs:
-  - deployment: DeployToProductionServer
-    displayName: Deploy production containers
-    environment:
-      name: 'servidor-gateway'
-      resourceType: virtualMachine
-    strategy:
-      runOnce:
-        deploy:
-          steps:
-          - script: |
-              set -euo pipefail
+  - job: DeployDevelopment
+    displayName: Deploy gateway to development
+    pool:
+      name: $(selfHostedPool)
+    steps:
+    - task: Docker@2
+      displayName: Login to Azure Container Registry
+      inputs:
+        command: login
+        containerRegistry: $(dockerRegistryServiceConnection)
 
-              echo "Creating environment folder and file..."
-              SSH_KEY="$(productionSshKey)"
-              SSH_TARGET="$(productionUser)@$(productionHost)"
-              GATEWAY_ENV_FILE="$(Pipeline.Workspace)/gateway.production.env"
+    - script: |
+        set -euo pipefail
 
-              if [ ! -f "$SSH_KEY" ]; then
-                echo "SSH key not found at $SSH_KEY"
-                exit 1
+        require_env() {
+          local name="$1"
+          local value="${!name:-}"
+
+          if [ -z "$value" ] || [[ "$value" == \$\(* ]]; then
+            echo "Missing required environment variable: $name"
+            exit 1
+          fi
+        }
+
+        resolve_ssh_key() {
+          local primary="$1"
+          local fallback="${2:-}"
+
+          if [ -f "$primary" ]; then
+            printf '%s\n' "$primary"
+            return 0
+          fi
+
+          if [ -n "$fallback" ] && [ -f "$fallback" ]; then
+            printf '%s\n' "$fallback"
+            return 0
+          fi
+
+          echo "SSH key not found. Tried: $primary ${fallback:-}" >&2
+          return 1
+        }
+
+        for name in CONTAINER_REGISTRY IMAGE_REPOSITORY TAG SSH_HOST SSH_USER REMOTE_GATEWAY_PATH COMPOSE_SOURCE_FILE SERVICE_NAME AUTH_API_KEY CATALOGO_API_KEY GATEWAY_GRPC_PORT LOGIN_BASE_URL CATALOGO_BASE_URL; do
+          require_env "$name"
+        done
+
+        if [ ! -f "$COMPOSE_SOURCE_FILE" ]; then
+          echo "Missing compose source file: $COMPOSE_SOURCE_FILE"
+          exit 1
+        fi
+
+        SSH_KEY="$(resolve_ssh_key "$SSH_KEY_PATH" "$SSH_KEY_FALLBACK")"
+        chmod 600 "$SSH_KEY"
+
+        IMAGE="${CONTAINER_REGISTRY}/${IMAGE_REPOSITORY}:${TAG}"
+        REMOTE="${SSH_USER}@${SSH_HOST}"
+        ENV_FILE_LOCAL="$(mktemp)"
+        REMOTE_OVERRIDE_FILE=".docker-compose.pipeline.yml"
+
+        cleanup() {
+          rm -f "$ENV_FILE_LOCAL"
+        }
+        trap cleanup EXIT
+
+        SSH_OPTS=(
+          -i "$SSH_KEY"
+          -o IdentitiesOnly=yes
+          -o StrictHostKeyChecking=accept-new
+        )
+
+        DOCKER_CONFIG_FILE="${DOCKER_CONFIG:-$HOME/.docker}/config.json"
+        if [ ! -f "$DOCKER_CONFIG_FILE" ]; then
+          echo "Missing Docker config after ACR login: $DOCKER_CONFIG_FILE"
+          exit 1
+        fi
+
+        umask 077
+        {
+          printf 'NODE_ENV=production\n'
+          printf 'LOGIN_BASE_URL=%s\n' "$LOGIN_BASE_URL"
+          printf 'LOGIN_API_KEY=%s\n' "$AUTH_API_KEY"
+          printf 'CATALOGO_BASE_URL=%s\n' "$CATALOGO_BASE_URL"
+          printf 'CATALOGO_API_KEY=%s\n' "$CATALOGO_API_KEY"
+          printf 'GRPC_PORT=%s\n' "$GATEWAY_GRPC_PORT"
+          printf 'LOG_LEVEL=info\n'
+        } > "$ENV_FILE_LOCAL"
+
+        echo "Copying ACR Docker login to development server..."
+        ssh "${SSH_OPTS[@]}" "$REMOTE" "mkdir -p ~/.docker && umask 077 && cat > ~/.docker/config.json" < "$DOCKER_CONFIG_FILE"
+
+        echo "Updating development .env and compose file..."
+        ssh "${SSH_OPTS[@]}" "$REMOTE" "mkdir -p '$REMOTE_GATEWAY_PATH' && umask 077 && cat > '$REMOTE_GATEWAY_PATH/.env.pipeline'" < "$ENV_FILE_LOCAL"
+        ssh "${SSH_OPTS[@]}" "$REMOTE" "mv '$REMOTE_GATEWAY_PATH/.env.pipeline' '$REMOTE_GATEWAY_PATH/.env' && chmod 600 '$REMOTE_GATEWAY_PATH/.env'"
+        ssh "${SSH_OPTS[@]}" "$REMOTE" "cat > '$REMOTE_GATEWAY_PATH/$COMPOSE_FILE'" < "$COMPOSE_SOURCE_FILE"
+
+        echo "Deploying development gateway container..."
+        ssh "${SSH_OPTS[@]}" "$REMOTE" \
+          "REMOTE_GATEWAY_PATH='$REMOTE_GATEWAY_PATH' COMPOSE_FILE='$COMPOSE_FILE' OVERRIDE_FILE='$REMOTE_OVERRIDE_FILE' SERVICE_NAME='$SERVICE_NAME' GATEWAY_IMAGE='$IMAGE' GATEWAY_GRPC_PORT='$GATEWAY_GRPC_PORT' bash -se" << 'REMOTE_SCRIPT'
+        set -euo pipefail
+
+        cd "$REMOTE_GATEWAY_PATH"
+
+        docker network inspect academico-backend >/dev/null 2>&1 || docker network create academico-backend
+
+        cat > "$OVERRIDE_FILE" <<EOF
+        services:
+          academico-gateway:
+            image: ${GATEWAY_IMAGE}
+        EOF
+
+        wait_for_service() {
+          local service="$1"
+          local attempts=24
+          local container_id=""
+          local status=""
+
+          for attempt in $(seq 1 "$attempts"); do
+            container_id="$(docker compose --env-file .env -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" ps -q "$service" || true)"
+            if [ -n "$container_id" ]; then
+              status="$(docker inspect -f '{{.State.Status}}' "$container_id" 2>/dev/null || true)"
+              if [ "$status" = "running" ]; then
+                printf '%s\n' "$container_id"
+                return 0
               fi
+            fi
+            sleep 5
+          done
 
-              chmod 600 "$SSH_KEY"
-              umask 077
-              : > "$GATEWAY_ENV_FILE"
-              chmod 600 "$GATEWAY_ENV_FILE"
+          echo "Service $service did not stay running."
+          docker compose --env-file .env -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" ps || true
+          docker compose --env-file .env -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" logs --tail=200 "$service" || true
+          exit 1
+        }
 
-              write_env_var() {
-                printf '%s=%s\n' "$1" "$2" >> "$GATEWAY_ENV_FILE"
-              }
+        echo "Validating compose configuration..."
+        docker compose --env-file .env -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" config >/dev/null
 
-              write_env_var NODE_ENV "$NODE_ENV"
-              write_env_var LOGIN_BASE_URL "$LOGIN_BASE_URL"
-              write_env_var LOGIN_API_KEY "$LOGIN_API_KEY"
-              write_env_var CATALOGO_BASE_URL "$CATALOGO_BASE_URL"
-              write_env_var CATALOGO_API_KEY "$CATALOGO_API_KEY"
-              write_env_var GRPC_PORT "$GRPC_PORT"
+        echo "Stopping previous gateway container..."
+        docker compose --env-file .env -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" down --remove-orphans || true
 
-              MICROSERVICES_HOSTS="$(awk -F'[/:]' '/^(LOGIN_BASE_URL|CATALOGO_BASE_URL)=/{print $4}' "$GATEWAY_ENV_FILE" | sort -u | paste -sd, -)"
-              if [ "$MICROSERVICES_HOSTS" != "$(productionMicroservicesHost)" ]; then
-                echo "Production microservices host mismatch. Expected $(productionMicroservicesHost), got ${MICROSERVICES_HOSTS:-none}."
-                exit 1
+        echo "Pulling gateway image..."
+        docker compose --env-file .env -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" pull "$SERVICE_NAME"
+
+        echo "Starting gateway service..."
+        docker compose --env-file .env -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" up -d --remove-orphans --no-build "$SERVICE_NAME"
+
+        echo "Verifying gateway service..."
+        container_id="$(wait_for_service "$SERVICE_NAME")"
+        if docker port "$container_id" | grep -q '^3000/'; then
+          echo "Gateway must not publish HTTP port 3000."
+          docker port "$container_id"
+          exit 1
+        fi
+        if ! docker port "$container_id" | grep -q "^${GATEWAY_GRPC_PORT}/"; then
+          echo "Gateway is not publishing gRPC port ${GATEWAY_GRPC_PORT}."
+          docker port "$container_id" || true
+          exit 1
+        fi
+
+        docker compose --env-file .env -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" ps
+        docker image prune -f
+
+        echo "Development deployment completed."
+        REMOTE_SCRIPT
+
+        if command -v grpcurl >/dev/null 2>&1; then
+          echo "Checking gRPC descriptor on development endpoint..."
+          for attempt in $(seq 1 12); do
+            if grpcurl -plaintext "${PUBLIC_GRPC_HOST}:${GATEWAY_GRPC_PORT}" describe auth.v1.AuthService 2>/tmp/gateway-grpcurl.err | grep -q 'ResetPassword'; then
+              echo "ResetPassword is available through development gateway."
+              exit 0
+            fi
+            sleep 5
+          done
+          cat /tmp/gateway-grpcurl.err || true
+          echo "ResetPassword was not found on development gateway."
+          exit 1
+        fi
+
+        echo "grpcurl is not installed on the deploy agent; skipping descriptor check."
+      displayName: Deploy academico-gateway to development
+      env:
+        CONTAINER_REGISTRY: $(containerRegistry)
+        IMAGE_REPOSITORY: $(imageRepository)
+        TAG: $(tag)
+        SSH_HOST: $(devSshHost)
+        SSH_USER: $(sshUser)
+        SSH_KEY_PATH: $(devSshKey)
+        SSH_KEY_FALLBACK: $(devSshKeyFallback)
+        REMOTE_GATEWAY_PATH: $(devGatewayPath)
+        COMPOSE_FILE: $(composeFile)
+        COMPOSE_SOURCE_FILE: $(Build.SourcesDirectory)/$(composeFile)
+        SERVICE_NAME: $(serviceName)
+        CONTAINER_NAME: $(containerName)
+        AUTH_API_KEY: $(USUARIOS_API_KEY)
+        CATALOGO_API_KEY: $(CATALOGO_API_KEY)
+        LOGIN_BASE_URL: http://$(devMicroservicesHost):3001
+        CATALOGO_BASE_URL: http://$(devMicroservicesHost):3003
+        GATEWAY_GRPC_PORT: $(grpcPort)
+        PUBLIC_GRPC_HOST: $(devGatewayHost)
+
+- stage: ApproveProduction
+  displayName: Approve production deployment to 20.96.156.43
+  dependsOn: DeployDevelopment
+  condition: succeeded()
+  jobs:
+  - job: WaitForProductionApproval
+    displayName: Await production approval
+    pool: server
+    timeoutInMinutes: 1440
+    steps:
+    - task: ManualValidation@1
+      displayName: Approve production deployment
+      timeoutInMinutes: 1440
+      inputs:
+        notifyUsers: $(productionApprover)
+        approvers: $(productionApprover)
+        allowApproversToApproveTheirOwnRuns: true
+        instructions: 'Approve to deploy academico-gateway to production server 20.96.156.43.'
+        onTimeout: reject
+
+- stage: DeployProduction
+  displayName: Deploy to production server 20.96.156.43
+  dependsOn: ApproveProduction
+  condition: succeeded()
+  jobs:
+  - job: DeployProduction
+    displayName: Deploy gateway to production
+    pool:
+      name: $(selfHostedPool)
+    steps:
+    - task: Docker@2
+      displayName: Login to Azure Container Registry
+      inputs:
+        command: login
+        containerRegistry: $(dockerRegistryServiceConnection)
+
+    - script: |
+        set -euo pipefail
+
+        require_env() {
+          local name="$1"
+          local value="${!name:-}"
+
+          if [ -z "$value" ] || [[ "$value" == \$\(* ]]; then
+            echo "Missing required environment variable: $name"
+            exit 1
+          fi
+        }
+
+        resolve_ssh_key() {
+          local primary="$1"
+          local fallback="${2:-}"
+
+          if [ -f "$primary" ]; then
+            printf '%s\n' "$primary"
+            return 0
+          fi
+
+          if [ -n "$fallback" ] && [ -f "$fallback" ]; then
+            printf '%s\n' "$fallback"
+            return 0
+          fi
+
+          echo "SSH key not found. Tried: $primary ${fallback:-}" >&2
+          return 1
+        }
+
+        for name in CONTAINER_REGISTRY IMAGE_REPOSITORY TAG SSH_HOST SSH_USER REMOTE_GATEWAY_PATH COMPOSE_SOURCE_FILE SERVICE_NAME AUTH_API_KEY CATALOGO_API_KEY GATEWAY_GRPC_PORT LOGIN_BASE_URL CATALOGO_BASE_URL; do
+          require_env "$name"
+        done
+
+        if [ ! -f "$COMPOSE_SOURCE_FILE" ]; then
+          echo "Missing compose source file: $COMPOSE_SOURCE_FILE"
+          exit 1
+        fi
+
+        SSH_KEY="$(resolve_ssh_key "$SSH_KEY_PATH" "$SSH_KEY_FALLBACK")"
+        chmod 600 "$SSH_KEY"
+
+        IMAGE="${CONTAINER_REGISTRY}/${IMAGE_REPOSITORY}:${TAG}"
+        REMOTE="${SSH_USER}@${SSH_HOST}"
+        ENV_FILE_LOCAL="$(mktemp)"
+        REMOTE_OVERRIDE_FILE=".docker-compose.pipeline.yml"
+
+        cleanup() {
+          rm -f "$ENV_FILE_LOCAL"
+        }
+        trap cleanup EXIT
+
+        SSH_OPTS=(
+          -i "$SSH_KEY"
+          -o IdentitiesOnly=yes
+          -o StrictHostKeyChecking=accept-new
+        )
+
+        DOCKER_CONFIG_FILE="${DOCKER_CONFIG:-$HOME/.docker}/config.json"
+        if [ ! -f "$DOCKER_CONFIG_FILE" ]; then
+          echo "Missing Docker config after ACR login: $DOCKER_CONFIG_FILE"
+          exit 1
+        fi
+
+        umask 077
+        {
+          printf 'NODE_ENV=production\n'
+          printf 'LOGIN_BASE_URL=%s\n' "$LOGIN_BASE_URL"
+          printf 'LOGIN_API_KEY=%s\n' "$AUTH_API_KEY"
+          printf 'CATALOGO_BASE_URL=%s\n' "$CATALOGO_BASE_URL"
+          printf 'CATALOGO_API_KEY=%s\n' "$CATALOGO_API_KEY"
+          printf 'GRPC_PORT=%s\n' "$GATEWAY_GRPC_PORT"
+          printf 'LOG_LEVEL=info\n'
+        } > "$ENV_FILE_LOCAL"
+
+        echo "Copying ACR Docker login to production server..."
+        ssh "${SSH_OPTS[@]}" "$REMOTE" "mkdir -p ~/.docker && umask 077 && cat > ~/.docker/config.json" < "$DOCKER_CONFIG_FILE"
+
+        echo "Updating production .env and compose file..."
+        ssh "${SSH_OPTS[@]}" "$REMOTE" "mkdir -p '$REMOTE_GATEWAY_PATH' && umask 077 && cat > '$REMOTE_GATEWAY_PATH/.env.pipeline'" < "$ENV_FILE_LOCAL"
+        ssh "${SSH_OPTS[@]}" "$REMOTE" "mv '$REMOTE_GATEWAY_PATH/.env.pipeline' '$REMOTE_GATEWAY_PATH/.env' && chmod 600 '$REMOTE_GATEWAY_PATH/.env'"
+        ssh "${SSH_OPTS[@]}" "$REMOTE" "cat > '$REMOTE_GATEWAY_PATH/$COMPOSE_FILE'" < "$COMPOSE_SOURCE_FILE"
+
+        echo "Deploying production gateway container..."
+        ssh "${SSH_OPTS[@]}" "$REMOTE" \
+          "REMOTE_GATEWAY_PATH='$REMOTE_GATEWAY_PATH' COMPOSE_FILE='$COMPOSE_FILE' OVERRIDE_FILE='$REMOTE_OVERRIDE_FILE' SERVICE_NAME='$SERVICE_NAME' GATEWAY_IMAGE='$IMAGE' GATEWAY_GRPC_PORT='$GATEWAY_GRPC_PORT' bash -se" << 'REMOTE_SCRIPT'
+        set -euo pipefail
+
+        cd "$REMOTE_GATEWAY_PATH"
+
+        docker network inspect academico-backend >/dev/null 2>&1 || docker network create academico-backend
+
+        cat > "$OVERRIDE_FILE" <<EOF
+        services:
+          academico-gateway:
+            image: ${GATEWAY_IMAGE}
+        EOF
+
+        wait_for_service() {
+          local service="$1"
+          local attempts=24
+          local container_id=""
+          local status=""
+
+          for attempt in $(seq 1 "$attempts"); do
+            container_id="$(docker compose --env-file .env -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" ps -q "$service" || true)"
+            if [ -n "$container_id" ]; then
+              status="$(docker inspect -f '{{.State.Status}}' "$container_id" 2>/dev/null || true)"
+              if [ "$status" = "running" ]; then
+                printf '%s\n' "$container_id"
+                return 0
               fi
+            fi
+            sleep 5
+          done
 
-              ssh -i "$SSH_KEY" -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new \
-                "$SSH_TARGET" "mkdir -p '$(productionGatewayPath)'"
-              scp -i "$SSH_KEY" -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new \
-                "$GATEWAY_ENV_FILE" "$SSH_TARGET:$(productionGatewayPath)/.env"
-              ssh -i "$SSH_KEY" -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new \
-                "$SSH_TARGET" "chmod 600 '$(productionGatewayPath)/.env'"
-            displayName: 'Create gateway .env file on production server'
-            env:
-              NODE_ENV: production
-              LOGIN_BASE_URL: http://$(productionMicroservicesHost):3001
-              LOGIN_API_KEY: $(LOGIN_API_KEY)
-              CATALOGO_BASE_URL: http://$(productionMicroservicesHost):3003
-              CATALOGO_API_KEY: $(CATALOGO_API_KEY)
-              GRPC_PORT: $(GRPC_PORT)
+          echo "Service $service did not stay running."
+          docker compose --env-file .env -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" ps || true
+          docker compose --env-file .env -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" logs --tail=200 "$service" || true
+          exit 1
+        }
 
-          - script: |
-              set -euo pipefail
+        echo "Validating compose configuration..."
+        docker compose --env-file .env -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" config >/dev/null
 
-              SSH_KEY="$(productionSshKey)"
-              SSH_TARGET="$(productionUser)@$(productionHost)"
-              GATEWAY_IMAGE="$(containerRegistry)/$(imageRepository):$(tag)"
+        echo "Stopping previous gateway container..."
+        docker compose --env-file .env -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" down --remove-orphans || true
 
-              chmod 600 "$SSH_KEY"
+        echo "Pulling gateway image..."
+        docker compose --env-file .env -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" pull "$SERVICE_NAME"
 
-              ssh -i "$SSH_KEY" -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new \
-                "$SSH_TARGET" \
-                "ACR_NAME='$(acrName)' GATEWAY_IMAGE='$GATEWAY_IMAGE' GATEWAY_DIR='$(productionGatewayPath)' WEB_DIR='$(productionWebPath)' bash -s" <<'REMOTE'
-              set -euo pipefail
+        echo "Starting gateway service..."
+        docker compose --env-file .env -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" up -d --remove-orphans --no-build "$SERVICE_NAME"
 
-              require_dir() {
-                if [ ! -d "$1/.git" ]; then
-                  echo "Expected Git checkout not found: $1"
-                  exit 1
-                fi
-              }
+        echo "Verifying gateway service..."
+        container_id="$(wait_for_service "$SERVICE_NAME")"
+        if docker port "$container_id" | grep -q '^3000/'; then
+          echo "Gateway must not publish HTTP port 3000."
+          docker port "$container_id"
+          exit 1
+        fi
+        if ! docker port "$container_id" | grep -q "^${GATEWAY_GRPC_PORT}/"; then
+          echo "Gateway is not publishing gRPC port ${GATEWAY_GRPC_PORT}."
+          docker port "$container_id" || true
+          exit 1
+        fi
 
-              update_repo() {
-                local dir="$1"
-                echo "Updating $dir..."
-                cd "$dir"
-                git fetch origin main
-                git pull --ff-only origin main
-              }
+        docker compose --env-file .env -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" ps
+        docker image prune -f
 
-              wait_for_container() {
-                local name="$1"
-                local attempts=24
+        echo "Production deployment completed."
+        REMOTE_SCRIPT
 
-                for attempt in $(seq 1 "$attempts"); do
-                  if docker ps --filter "name=^/${name}$" --filter "status=running" --format '{{.Names}}' | grep -qx "$name"; then
-                    return 0
-                  fi
-                  sleep 5
-                done
+        if command -v grpcurl >/dev/null 2>&1; then
+          echo "Checking gRPC descriptor on production endpoint..."
+          for attempt in $(seq 1 12); do
+            if grpcurl -plaintext "${PUBLIC_GRPC_HOST}:${GATEWAY_GRPC_PORT}" describe auth.v1.AuthService 2>/tmp/gateway-grpcurl.err | grep -q 'ResetPassword'; then
+              echo "ResetPassword is available through production gateway."
+              exit 0
+            fi
+            sleep 5
+          done
+          cat /tmp/gateway-grpcurl.err || true
+          echo "ResetPassword was not found on production gateway."
+          exit 1
+        fi
 
-                echo "Container $name did not stay running."
-                docker ps -a --filter "name=^/${name}$"
-                docker logs --tail 200 "$name" || true
-                exit 1
-              }
-
-              require_dir "$GATEWAY_DIR"
-              require_dir "$WEB_DIR"
-
-              az acr login --name "$ACR_NAME"
-
-              update_repo "$GATEWAY_DIR"
-              update_repo "$WEB_DIR"
-
-              GATEWAY_OVERRIDE="$(mktemp)"
-              trap 'rm -f "$GATEWAY_OVERRIDE"' EXIT
-              cat > "$GATEWAY_OVERRIDE" <<EOF
-              services:
-                academico-gateway:
-                  image: ${GATEWAY_IMAGE}
-              EOF
-
-              echo "Stopping production compose projects..."
-              cd "$WEB_DIR"
-              docker compose down --remove-orphans
-              cd "$GATEWAY_DIR"
-              docker compose -f docker-compose.yml -f "$GATEWAY_OVERRIDE" down --remove-orphans
-
-              echo "Starting gateway from pipeline image..."
-              cd "$GATEWAY_DIR"
-              docker compose -f docker-compose.yml -f "$GATEWAY_OVERRIDE" up -d --pull always --no-build academico-gateway
-
-              echo "Starting web from production checkout..."
-              cd "$WEB_DIR"
-              docker compose up -d --build app
-
-              echo "Verifying production containers..."
-              wait_for_container academico-gateway
-              wait_for_container academico-web-app-1
-
-              docker ps --filter "name=academico-gateway" --filter "name=academico-web-app-1" \
-                --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}'
-
-              docker image prune -f
-              echo "Production deployment completed."
-              REMOTE
-            displayName: Run production compose deployment
+        echo "grpcurl is not installed on the deploy agent; skipping descriptor check."
+      displayName: Deploy academico-gateway to production
+      env:
+        CONTAINER_REGISTRY: $(containerRegistry)
+        IMAGE_REPOSITORY: $(imageRepository)
+        TAG: $(tag)
+        SSH_HOST: $(prodSshHost)
+        SSH_USER: $(sshUser)
+        SSH_KEY_PATH: $(prodSshKey)
+        SSH_KEY_FALLBACK: $(prodSshKeyFallback)
+        REMOTE_GATEWAY_PATH: $(prodGatewayPath)
+        COMPOSE_FILE: $(composeFile)
+        COMPOSE_SOURCE_FILE: $(Build.SourcesDirectory)/$(composeFile)
+        SERVICE_NAME: $(serviceName)
+        CONTAINER_NAME: $(containerName)
+        AUTH_API_KEY: $(USUARIOS_API_KEY)
+        CATALOGO_API_KEY: $(CATALOGO_API_KEY)
+        LOGIN_BASE_URL: http://$(prodMicroservicesHost):3001
+        CATALOGO_BASE_URL: http://$(prodMicroservicesHost):3003
+        GATEWAY_GRPC_PORT: $(grpcPort)
+        PUBLIC_GRPC_HOST: $(prodSshHost)
