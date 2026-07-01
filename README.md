@@ -1,8 +1,8 @@
 # academico-gateway
 
-API Gateway del Sistema de Gestion Academica.
+Gateway gRPC del Sistema de Gestion Academica.
 
-Este servicio es el punto de entrada HTTP/gRPC para los microservicios academicos. Centraliza validacion de acceso, consulta de whitelist, rate limiting y redireccion de requests hacia servicios internos.
+Este servicio es el punto de entrada gRPC para los microservicios academicos. Expone servicios gRPC nativos y reenvia las llamadas a los servicios internos configurados.
 
 ## Documentacion
 
@@ -17,12 +17,11 @@ La carpeta `docs/` esta preparada para publicarse como Wiki de Azure DevOps usan
 
 El gateway:
 
-- Expone rutas por prefijo de microservicio, por ejemplo `/login/*`, `/usuarios/*`, `/matriculas/*`.
-- Consulta la whitelist publica en `academico-login`.
-- Valida JWT contra `academico-login`.
-- Cachea whitelist y validaciones de token en Redis.
-- Reenvia el request al microservicio destino quitando el prefijo del servicio.
-- Agrega `x-api-key` interna al request redirigido.
+- Expone `auth.v1.AuthService` y `catalogo.v1.CatalogoService` por gRPC nativo.
+- Reenvia llamadas de auth hacia `academico-login`.
+- Reenvia llamadas de catalogo hacia `academico-catalogo`.
+- Agrega `x-api-key` interna al request reenviado.
+- No registra rutas REST, Connect/HTTP, Swagger, health HTTP ni proxy por prefijos.
 
 ## Configuracion
 
@@ -32,16 +31,9 @@ Variables principales:
 
 - `LOGIN_BASE_URL`
 - `LOGIN_API_KEY`
-- `USUARIOS_BASE_URL`
-- `USUARIOS_API_KEY`
-- `CALIFICACIONES_BASE_URL`
 - `CATALOGO_BASE_URL`
-- `MATRICULAS_BASE_URL`
-- `SOLICITUDES_BASE_URL`
-- `GATEWAY_TOKEN_CACHE_TTL`
-- `GATEWAY_WHITELIST_CACHE_TTL`
-- `REDIS_HOST`
-- `REDIS_PORT`
+- `CATALOGO_API_KEY`
+- `GRPC_PORT`
 
 ## Ejecucion local
 

@@ -86,39 +86,14 @@ stages:
                 printf '%s=%s\n' "$1" "$2" >> "$GATEWAY_ENV_FILE"
               }
 
-              write_env_var PORT "$PORT"
               write_env_var NODE_ENV "$NODE_ENV"
-              write_env_var REDIS_PROTOCOL "$REDIS_PROTOCOL"
-              write_env_var REDIS_HOST "$REDIS_HOST"
-              write_env_var REDIS_PORT "$REDIS_PORT"
-              write_env_var REDIS_PASSWORD "$REDIS_PASSWORD"
               write_env_var LOGIN_BASE_URL "$LOGIN_BASE_URL"
               write_env_var LOGIN_API_KEY "$LOGIN_API_KEY"
-              write_env_var USUARIOS_BASE_URL "$USUARIOS_BASE_URL"
-              write_env_var USUARIOS_API_KEY "$USUARIOS_API_KEY"
-              write_env_var CALIFICACIONES_BASE_URL "$CALIFICACIONES_BASE_URL"
-              write_env_var CALIFICACIONES_API_KEY "$CALIFICACIONES_API_KEY"
               write_env_var CATALOGO_BASE_URL "$CATALOGO_BASE_URL"
               write_env_var CATALOGO_API_KEY "$CATALOGO_API_KEY"
-              write_env_var MATRICULAS_BASE_URL "$MATRICULAS_BASE_URL"
-              write_env_var MATRICULAS_API_KEY "$MATRICULAS_API_KEY"
-              write_env_var SOLICITUDES_BASE_URL "$SOLICITUDES_BASE_URL"
-              write_env_var SOLICITUDES_API_KEY "$SOLICITUDES_API_KEY"
-              write_env_var GATEWAY_TOKEN_CACHE_TTL "$GATEWAY_TOKEN_CACHE_TTL"
-              write_env_var GATEWAY_WHITELIST_CACHE_TTL "$GATEWAY_WHITELIST_CACHE_TTL"
-              write_env_var ENV "$ENV"
               write_env_var GRPC_PORT "$GRPC_PORT"
-              write_env_var RATE_LIMIT_IP_ENABLED "$RATE_LIMIT_IP_ENABLED"
-              write_env_var RATE_LIMIT_IP_MAX "$RATE_LIMIT_IP_MAX"
-              write_env_var RATE_LIMIT_IP_WINDOW "$RATE_LIMIT_IP_WINDOW"
-              write_env_var RATE_LIMIT_USER_ENABLED "$RATE_LIMIT_USER_ENABLED"
-              write_env_var RATE_LIMIT_USER_MAX "$RATE_LIMIT_USER_MAX"
-              write_env_var RATE_LIMIT_USER_WINDOW "$RATE_LIMIT_USER_WINDOW"
-              write_env_var RATE_LIMIT_UPLOAD_ENABLED "$RATE_LIMIT_UPLOAD_ENABLED"
-              write_env_var RATE_LIMIT_UPLOAD_MAX "$RATE_LIMIT_UPLOAD_MAX"
-              write_env_var RATE_LIMIT_UPLOAD_WINDOW "$RATE_LIMIT_UPLOAD_WINDOW"
 
-              MICROSERVICES_HOSTS="$(awk -F'[/:]' '/^(LOGIN_BASE_URL|USUARIOS_BASE_URL|CALIFICACIONES_BASE_URL|CATALOGO_BASE_URL|MATRICULAS_BASE_URL|SOLICITUDES_BASE_URL)=/{print $4}' "$GATEWAY_ENV_FILE" | sort -u | paste -sd, -)"
+              MICROSERVICES_HOSTS="$(awk -F'[/:]' '/^(LOGIN_BASE_URL|CATALOGO_BASE_URL)=/{print $4}' "$GATEWAY_ENV_FILE" | sort -u | paste -sd, -)"
               if [ "$MICROSERVICES_HOSTS" != "$(productionMicroservicesHost)" ]; then
                 echo "Production microservices host mismatch. Expected $(productionMicroservicesHost), got ${MICROSERVICES_HOSTS:-none}."
                 exit 1
@@ -132,37 +107,12 @@ stages:
                 "$SSH_TARGET" "chmod 600 '$(productionGatewayPath)/.env'"
             displayName: 'Create gateway .env file on production server'
             env:
-              PORT: 3000
               NODE_ENV: production
-              REDIS_PROTOCOL: $(REDIS_PROTOCOL)
-              REDIS_HOST: $(REDIS_HOST)
-              REDIS_PORT: $(REDIS_PORT)
-              REDIS_PASSWORD: $(REDIS_PASSWORD)
               LOGIN_BASE_URL: http://$(productionMicroservicesHost):3001
               LOGIN_API_KEY: $(LOGIN_API_KEY)
-              USUARIOS_BASE_URL: http://$(productionMicroservicesHost):3006
-              USUARIOS_API_KEY: $(USUARIOS_API_KEY)
-              CALIFICACIONES_BASE_URL: http://$(productionMicroservicesHost):3002
-              CALIFICACIONES_API_KEY: $(CALIFICACIONES_API_KEY)
               CATALOGO_BASE_URL: http://$(productionMicroservicesHost):3003
               CATALOGO_API_KEY: $(CATALOGO_API_KEY)
-              MATRICULAS_BASE_URL: http://$(productionMicroservicesHost):3004
-              MATRICULAS_API_KEY: $(MATRICULAS_API_KEY)
-              SOLICITUDES_BASE_URL: http://$(productionMicroservicesHost):3005
-              SOLICITUDES_API_KEY: $(SOLICITUDES_API_KEY)
-              GATEWAY_TOKEN_CACHE_TTL: $(GATEWAY_TOKEN_CACHE_TTL)
-              GATEWAY_WHITELIST_CACHE_TTL: $(GATEWAY_WHITELIST_CACHE_TTL)
-              ENV: $(ENV)
               GRPC_PORT: $(GRPC_PORT)
-              RATE_LIMIT_IP_ENABLED: $(RATE_LIMIT_IP_ENABLED)
-              RATE_LIMIT_IP_MAX: $(RATE_LIMIT_IP_MAX)
-              RATE_LIMIT_IP_WINDOW: $(RATE_LIMIT_IP_WINDOW)
-              RATE_LIMIT_USER_ENABLED: $(RATE_LIMIT_USER_ENABLED)
-              RATE_LIMIT_USER_MAX: $(RATE_LIMIT_USER_MAX)
-              RATE_LIMIT_USER_WINDOW: $(RATE_LIMIT_USER_WINDOW)
-              RATE_LIMIT_UPLOAD_ENABLED: $(RATE_LIMIT_UPLOAD_ENABLED)
-              RATE_LIMIT_UPLOAD_MAX: $(RATE_LIMIT_UPLOAD_MAX)
-              RATE_LIMIT_UPLOAD_WINDOW: $(RATE_LIMIT_UPLOAD_WINDOW)
 
           - script: |
               set -euo pipefail

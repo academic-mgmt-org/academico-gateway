@@ -159,14 +159,7 @@ export const pinoLoggerConfig = {
      */
     autoLogging: {
       ignore: req => {
-        const ignoredPaths = ['/api/health', '/health', '/healthz', '/readiness', '/liveness', '/metrics',
-        // Si usas Prometheus
-        '/api-docs',
-        // Swagger UI
-        '/favicon.ico',
-        // Favicon
-        '/socket.io' // WebSocket connections
-        ];
+        const ignoredPaths = ['/favicon.ico'];
         return ignoredPaths.some(path => req.url?.startsWith(path));
       }
     },
