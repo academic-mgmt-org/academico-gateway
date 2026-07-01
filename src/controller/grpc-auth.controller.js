@@ -151,6 +151,47 @@ export class GrpcAuthController {
     }
   }
 
+  @GrpcMethod('AuthService', 'ResetPassword')
+  async resetPassword(data) {
+    this.logger.log({
+      context: 'GrpcAuthController',
+      event: 'reset_password_call',
+      email: data?.email || null,
+    }, '[gRPC] ResetPassword llamado');
+
+    try {
+      const response = await this.authClient.resetPassword({
+        token: data?.token,
+        email: data?.email,
+        newPassword: data?.newPassword || data?.new_password,
+        passwordEncoding: data?.passwordEncoding || data?.password_encoding,
+      });
+
+      this.logger.log({
+        context: 'GrpcAuthController',
+        event: 'reset_password_success',
+        email: data?.email || null,
+      }, '[gRPC] ResetPassword exitoso');
+
+      return {
+        success: Boolean(response.success),
+        message: response.message || '',
+      };
+    } catch (error) {
+      this.logger.error({
+        context: 'GrpcAuthController',
+        event: 'reset_password_error',
+        email: data?.email || null,
+        error: error.message,
+      }, `[gRPC] Error en ResetPassword: ${error.message}`);
+
+      throw new RpcException({
+        code: error.code !== undefined ? error.code : 13,
+        message: error.rawMessage || error.message,
+      });
+    }
+  }
+
   @GrpcMethod('AuthService', 'Logout')
   async logout(data) {
     this.logger.log({

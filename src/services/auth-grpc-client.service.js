@@ -95,6 +95,25 @@ export class AuthGrpcClientService {
     });
   }
 
+  async resetPassword(data = {}) {
+    if (!this.client) {
+      throw new Error('Cliente de Auth no inicializado');
+    }
+
+    this.logger.debug({
+      context: 'AuthGrpcClientService',
+      event: 'reset_password_request',
+      email: data.email || '',
+    }, '[Auth] Solicitando ResetPassword al microservicio');
+
+    return this.client.resetPassword({
+      token: data.token || '',
+      email: data.email || '',
+      newPassword: data.newPassword || data.new_password || '',
+      passwordEncoding: data.passwordEncoding || data.password_encoding || '',
+    });
+  }
+
   async logout(data = {}) {
     if (!this.client) {
       throw new Error('Cliente de Auth no inicializado');
