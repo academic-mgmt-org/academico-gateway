@@ -17,11 +17,14 @@ La carpeta `docs/` esta preparada para publicarse como Wiki de Azure DevOps usan
 
 El gateway:
 
-- Expone `auth.v1.AuthService` y `catalogo.v1.CatalogoService` por gRPC nativo.
-- Reenvia llamadas de auth hacia `academico-login`.
-- Reenvia llamadas de catalogo hacia `academico-catalogo`.
-- Agrega `x-api-key` interna al request reenviado.
-- No registra rutas REST, Connect/HTTP, Swagger, health HTTP ni proxy por prefijos.
+- Expone servicios gRPC nativos mediante un proxy transparente.
+- Reenvia `auth.v1.*` hacia `academico-login`.
+- Reenvia `catalogo.v1.*` hacia `academico-catalogo`.
+- Reenvia `notificaciones.v1.*` hacia `academico-notificaciones`, incluyendo
+  `NotificationService`, `EmailService` y `HealthService`.
+- Agrega `x-api-key` interna al request reenviado y no confia en la API key
+  enviada por el cliente.
+- No registra rutas REST, Connect/HTTP, Swagger ni health HTTP.
 
 ## Configuracion
 
@@ -33,6 +36,8 @@ Variables principales:
 - `LOGIN_API_KEY`
 - `CATALOGO_BASE_URL`
 - `CATALOGO_API_KEY`
+- `NOTIFICACIONES_BASE_URL`
+- `NOTIFICACIONES_API_KEY`
 - `GRPC_PORT`
 
 ## Ejecucion local

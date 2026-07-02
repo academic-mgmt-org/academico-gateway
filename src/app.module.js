@@ -3,12 +3,6 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { LoggerModule, Logger } from 'nestjs-pino';
 import { pinoLoggerConfig } from './config/pino-logger.config';
 import { services } from './config/services.config';
-import { GrpcCatalogoController } from './controller/grpc-catalogo.controller';
-import { CatalogoGrpcClientService } from './services/catalogo-grpc-client.service';
-import { GrpcAuthController } from './controller/grpc-auth.controller';
-import { AuthGrpcClientService } from './services/auth-grpc-client.service';
-import { GrpcEmailController } from './controller/grpc-email.controller';
-import { NotificacionesGrpcClientService } from './services/notificaciones-grpc-client.service';
 
 @Module({
   imports: [
@@ -18,12 +12,9 @@ import { NotificacionesGrpcClientService } from './services/notificaciones-grpc-
       isGlobal: true,
     }),
   ],
-  controllers: [GrpcCatalogoController, GrpcAuthController, GrpcEmailController],
+  controllers: [],
   providers: [
     Logger,
-    CatalogoGrpcClientService,
-    AuthGrpcClientService,
-    NotificacionesGrpcClientService,
   ],
 })
 export class AppModule {

@@ -1,53 +1,32 @@
-import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
-import { Logger } from 'nestjs-pino';
-import { Transport } from '@nestjs/microservices';
-import { join } from 'path';
-import { ReflectionService } from '@grpc/reflection';
 import { config } from 'dotenv';
+import { startGrpcProxyServer } from './proxy/grpc-proxy-server';
 
 config();
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, {
-    bufferLogs: true,
-  });
-
-  const logger = app.get(Logger);
-  app.useLogger(logger);
-
   const grpcPort = process.env.GRPC_PORT || '50050';
-  app.connectMicroservice({
-    transport: Transport.GRPC,
-    options: {
-      package: ['catalogo.v1', 'auth.v1', 'notificaciones.v1'],
-      protoPath: [
-        join(__dirname, 'proto/catalogo/v1/catalogo.proto'),
-        join(__dirname, 'proto/auth.proto'),
-        join(__dirname, 'proto/notificaciones/v1/notificaciones.proto'),
-      ],
-      url: `0.0.0.0:${grpcPort}`,
-      onLoadPackageDefinition: (pkg, server) => {
-        new ReflectionService(pkg).addToServer(server);
-      },
-    },
+  const { server } = await startGrpcProxyServer({
+    port: grpcPort,
   });
 
-  await app.init();
-  await app.startAllMicroservices();
+  const shutdown = (signal) => {
+    console.log(`[gRPC proxy] ${signal} recibido. Cerrando servidor...`);
+    server.tryShutdown((error) => {
+      if (error) {
+        console.error('[gRPC proxy] Error al cerrar. Forzando shutdown.', error);
+        server.forceShutdown();
+        process.exit(1);
+      }
 
-  logger.log({
-    context: 'Bootstrap',
-    event: 'grpc_server_started',
-    grpcPort,
-    environment: process.env.NODE_ENV || 'development',
-    nodeVersion: process.version,
-    features: {
-      grpc: true,
-      http: false,
-      rest: false,
-    },
-  }, `API Gateway gRPC escuchando en puerto ${grpcPort}`);
+      process.exit(0);
+    });
+  };
+
+  process.once('SIGINT', shutdown);
+  process.once('SIGTERM', shutdown);
 }
 
-bootstrap();
+bootstrap().catch((error) => {
+  console.error('[gRPC proxy] Error al iniciar gateway.', error);
+  process.exit(1);
+});

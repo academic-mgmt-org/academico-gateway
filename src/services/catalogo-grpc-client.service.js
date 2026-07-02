@@ -11,8 +11,8 @@ import { services } from '../config/services.config';
  * Usa el protocolo Connect (HTTP/2) para comunicarse con el microservicio,
  * que a su vez usa fastifyConnectPlugin.
  * 
- * Este servicio es inyectado en el GrpcCatalogoController para que el
- * gateway actúe como intermediario entre clientes gRPC y el microservicio.
+ * Servicio legado del gateway tipado. El runtime actual usa el proxy gRPC
+ * generico definido en src/proxy/grpc-proxy-server.js.
  */
 @Injectable()
 export class CatalogoGrpcClientService {
