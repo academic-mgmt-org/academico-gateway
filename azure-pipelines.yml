@@ -172,8 +172,6 @@ stages:
 
         cd "$REMOTE_GATEWAY_PATH"
 
-        docker network inspect academico-backend >/dev/null 2>&1 || docker network create academico-backend
-
         cat > "$OVERRIDE_FILE" <<EOF
         services:
           academico-gateway:
@@ -218,16 +216,28 @@ stages:
 
         echo "Verifying gateway service..."
         container_id="$(wait_for_service "$SERVICE_NAME")"
-        if docker port "$container_id" | grep -q '^3000/'; then
-          echo "Gateway must not publish HTTP port 3000."
-          docker port "$container_id"
+        network_mode="$(docker inspect -f '{{.HostConfig.NetworkMode}}' "$container_id")"
+        if [ "$network_mode" != "host" ]; then
+          echo "Gateway container must use host networking, got: $network_mode"
           exit 1
         fi
-        if ! docker port "$container_id" | grep -q "^${GATEWAY_GRPC_PORT}/"; then
-          echo "Gateway is not publishing gRPC port ${GATEWAY_GRPC_PORT}."
+        if docker port "$container_id" 2>/dev/null | grep -q .; then
+          echo "Host-networked gateway must not publish Docker ports."
           docker port "$container_id" || true
           exit 1
         fi
+        if command -v nc >/dev/null 2>&1; then
+          if ! nc -z 127.0.0.1 "$GATEWAY_GRPC_PORT"; then
+            echo "Gateway is not listening on host gRPC port ${GATEWAY_GRPC_PORT}."
+            exit 1
+          fi
+        else
+          if ! timeout 5 bash -c "cat < /dev/null > /dev/tcp/127.0.0.1/${GATEWAY_GRPC_PORT}"; then
+            echo "Gateway is not listening on host gRPC port ${GATEWAY_GRPC_PORT}."
+            exit 1
+          fi
+        fi
+        echo "Gateway is listening on host gRPC port ${GATEWAY_GRPC_PORT}."
 
         docker compose --env-file .env -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" ps
         docker image prune -f
@@ -404,8 +414,6 @@ stages:
 
         cd "$REMOTE_GATEWAY_PATH"
 
-        docker network inspect academico-backend >/dev/null 2>&1 || docker network create academico-backend
-
         cat > "$OVERRIDE_FILE" <<EOF
         services:
           academico-gateway:
@@ -450,16 +458,28 @@ stages:
 
         echo "Verifying gateway service..."
         container_id="$(wait_for_service "$SERVICE_NAME")"
-        if docker port "$container_id" | grep -q '^3000/'; then
-          echo "Gateway must not publish HTTP port 3000."
-          docker port "$container_id"
+        network_mode="$(docker inspect -f '{{.HostConfig.NetworkMode}}' "$container_id")"
+        if [ "$network_mode" != "host" ]; then
+          echo "Gateway container must use host networking, got: $network_mode"
           exit 1
         fi
-        if ! docker port "$container_id" | grep -q "^${GATEWAY_GRPC_PORT}/"; then
-          echo "Gateway is not publishing gRPC port ${GATEWAY_GRPC_PORT}."
+        if docker port "$container_id" 2>/dev/null | grep -q .; then
+          echo "Host-networked gateway must not publish Docker ports."
           docker port "$container_id" || true
           exit 1
         fi
+        if command -v nc >/dev/null 2>&1; then
+          if ! nc -z 127.0.0.1 "$GATEWAY_GRPC_PORT"; then
+            echo "Gateway is not listening on host gRPC port ${GATEWAY_GRPC_PORT}."
+            exit 1
+          fi
+        else
+          if ! timeout 5 bash -c "cat < /dev/null > /dev/tcp/127.0.0.1/${GATEWAY_GRPC_PORT}"; then
+            echo "Gateway is not listening on host gRPC port ${GATEWAY_GRPC_PORT}."
+            exit 1
+          fi
+        fi
+        echo "Gateway is listening on host gRPC port ${GATEWAY_GRPC_PORT}."
 
         docker compose --env-file .env -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" ps
         docker image prune -f
