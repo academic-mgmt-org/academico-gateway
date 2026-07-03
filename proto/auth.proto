@@ -56,6 +56,30 @@ message GenericResponse {
   string message = 2;
 }
 
+message Empty {}
+
+message HealthResponse {
+  string status = 1;
+  string service = 2;
+  string timestamp = 3;
+  double uptime = 4;
+}
+
+message ReadyResponse {
+  bool ready = 1;
+  string timestamp = 2;
+}
+
+message LiveResponse {
+  bool alive = 1;
+  string timestamp = 2;
+  double uptime = 3;
+}
+
+message WhitelistResponse {
+  repeated string routes = 1;
+}
+
 service AuthService {
   rpc Login(LoginRequest) returns (LoginResponse) {}
   rpc RefreshToken(RefreshTokenRequest) returns (LoginResponse) {}
@@ -63,4 +87,14 @@ service AuthService {
   rpc ResetPassword(ResetPasswordRequest) returns (GenericResponse) {}
   rpc ValidateToken(ValidateTokenRequest) returns (ValidateTokenResponse) {}
   rpc Logout(LogoutRequest) returns (GenericResponse) {}
+}
+
+service HealthService {
+  rpc Health(Empty) returns (HealthResponse) {}
+  rpc Ready(Empty) returns (ReadyResponse) {}
+  rpc Live(Empty) returns (LiveResponse) {}
+}
+
+service WhitelistService {
+  rpc GetAll(Empty) returns (WhitelistResponse) {}
 }

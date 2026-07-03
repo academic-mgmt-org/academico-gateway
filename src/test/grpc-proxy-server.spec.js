@@ -43,9 +43,12 @@ describe('GrpcProxyServer', () => {
     expect(upstreamMetadata.get('x-api-key')).toEqual(['internal-key']);
   });
 
-  it('publica NotificationService, EmailService y HealthService en reflexion local', () => {
+  it('publica servicios de auth y notificaciones en reflexion local', () => {
     const packageDefinition = loadGatewayPackageDefinition();
 
+    expect(packageDefinition['auth.v1.AuthService']).toBeDefined();
+    expect(packageDefinition['auth.v1.HealthService']).toBeDefined();
+    expect(packageDefinition['auth.v1.WhitelistService']).toBeDefined();
     expect(packageDefinition['notificaciones.v1.NotificationService']).toBeDefined();
     expect(packageDefinition['notificaciones.v1.EmailService']).toBeDefined();
     expect(packageDefinition['notificaciones.v1.HealthService']).toBeDefined();
