@@ -125,7 +125,6 @@ stages:
         IMAGE="${CONTAINER_REGISTRY}/${IMAGE_REPOSITORY}:${TAG}"
         REMOTE="${SSH_USER}@${SSH_HOST}"
         ENV_FILE_LOCAL="$(mktemp)"
-        REMOTE_OVERRIDE_FILE=".docker-compose.pipeline.yml"
 
         cleanup() {
           rm -f "$ENV_FILE_LOCAL"
@@ -154,6 +153,7 @@ stages:
           printf 'NOTIFICACIONES_BASE_URL=%s\n' "$NOTIFICACIONES_BASE_URL"
           printf 'NOTIFICACIONES_API_KEY=%s\n' "$NOTIFICACIONES_API_KEY"
           printf 'GRPC_PORT=%s\n' "$GATEWAY_GRPC_PORT"
+          printf 'GATEWAY_IMAGE=%s\n' "$IMAGE"
           printf 'LOG_LEVEL=info\n'
         } > "$ENV_FILE_LOCAL"
 
@@ -167,16 +167,10 @@ stages:
 
         echo "Deploying development gateway container..."
         ssh "${SSH_OPTS[@]}" "$REMOTE" \
-          "REMOTE_GATEWAY_PATH='$REMOTE_GATEWAY_PATH' COMPOSE_FILE='$COMPOSE_FILE' OVERRIDE_FILE='$REMOTE_OVERRIDE_FILE' SERVICE_NAME='$SERVICE_NAME' GATEWAY_IMAGE='$IMAGE' GATEWAY_GRPC_PORT='$GATEWAY_GRPC_PORT' bash -se" << 'REMOTE_SCRIPT'
+          "REMOTE_GATEWAY_PATH='$REMOTE_GATEWAY_PATH' COMPOSE_FILE='$COMPOSE_FILE' SERVICE_NAME='$SERVICE_NAME' GATEWAY_GRPC_PORT='$GATEWAY_GRPC_PORT' bash -se" << 'REMOTE_SCRIPT'
         set -euo pipefail
 
         cd "$REMOTE_GATEWAY_PATH"
-
-        cat > "$OVERRIDE_FILE" <<EOF
-        services:
-          academico-gateway:
-            image: ${GATEWAY_IMAGE}
-        EOF
 
         wait_for_service() {
           local service="$1"
@@ -185,7 +179,7 @@ stages:
           local status=""
 
           for attempt in $(seq 1 "$attempts"); do
-            container_id="$(docker compose --env-file .env -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" ps -q "$service" || true)"
+            container_id="$(docker compose --env-file .env -f "$COMPOSE_FILE" ps -q "$service" || true)"
             if [ -n "$container_id" ]; then
               status="$(docker inspect -f '{{.State.Status}}' "$container_id" 2>/dev/null || true)"
               if [ "$status" = "running" ]; then
@@ -197,8 +191,8 @@ stages:
           done
 
           echo "Service $service did not stay running."
-          docker compose --env-file .env -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" ps || true
-          docker compose --env-file .env -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" logs --tail=200 "$service" || true
+          docker compose --env-file .env -f "$COMPOSE_FILE" ps || true
+          docker compose --env-file .env -f "$COMPOSE_FILE" logs --tail=200 "$service" || true
           exit 1
         }
 
@@ -220,22 +214,22 @@ stages:
           done
 
           echo "Gateway is not listening on host gRPC port ${port}."
-          docker compose --env-file .env -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" ps || true
-          docker compose --env-file .env -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" logs --tail=200 "$service" || true
+          docker compose --env-file .env -f "$COMPOSE_FILE" ps || true
+          docker compose --env-file .env -f "$COMPOSE_FILE" logs --tail=200 "$service" || true
           exit 1
         }
 
         echo "Validating compose configuration..."
-        docker compose --env-file .env -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" config >/dev/null
+        docker compose --env-file .env -f "$COMPOSE_FILE" config >/dev/null
 
         echo "Stopping previous gateway container..."
-        docker compose --env-file .env -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" down --remove-orphans || true
+        docker compose --env-file .env -f "$COMPOSE_FILE" down --remove-orphans || true
 
         echo "Pulling gateway image..."
-        docker compose --env-file .env -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" pull "$SERVICE_NAME"
+        docker compose --env-file .env -f "$COMPOSE_FILE" pull "$SERVICE_NAME"
 
         echo "Starting gateway service..."
-        docker compose --env-file .env -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" up -d --remove-orphans --no-build "$SERVICE_NAME"
+        docker compose --env-file .env -f "$COMPOSE_FILE" up -d --remove-orphans --no-build "$SERVICE_NAME"
 
         echo "Verifying gateway service..."
         container_id="$(wait_for_service "$SERVICE_NAME")"
@@ -252,7 +246,7 @@ stages:
         wait_for_host_port "$SERVICE_NAME" "$GATEWAY_GRPC_PORT"
         echo "Gateway is listening on host gRPC port ${GATEWAY_GRPC_PORT}."
 
-        docker compose --env-file .env -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" ps
+        docker compose --env-file .env -f "$COMPOSE_FILE" ps
         docker image prune -f
 
         echo "Development deployment completed."
@@ -380,7 +374,6 @@ stages:
         IMAGE="${CONTAINER_REGISTRY}/${IMAGE_REPOSITORY}:${TAG}"
         REMOTE="${SSH_USER}@${SSH_HOST}"
         ENV_FILE_LOCAL="$(mktemp)"
-        REMOTE_OVERRIDE_FILE=".docker-compose.pipeline.yml"
 
         cleanup() {
           rm -f "$ENV_FILE_LOCAL"
@@ -409,6 +402,7 @@ stages:
           printf 'NOTIFICACIONES_BASE_URL=%s\n' "$NOTIFICACIONES_BASE_URL"
           printf 'NOTIFICACIONES_API_KEY=%s\n' "$NOTIFICACIONES_API_KEY"
           printf 'GRPC_PORT=%s\n' "$GATEWAY_GRPC_PORT"
+          printf 'GATEWAY_IMAGE=%s\n' "$IMAGE"
           printf 'LOG_LEVEL=info\n'
         } > "$ENV_FILE_LOCAL"
 
@@ -422,16 +416,10 @@ stages:
 
         echo "Deploying production gateway container..."
         ssh "${SSH_OPTS[@]}" "$REMOTE" \
-          "REMOTE_GATEWAY_PATH='$REMOTE_GATEWAY_PATH' COMPOSE_FILE='$COMPOSE_FILE' OVERRIDE_FILE='$REMOTE_OVERRIDE_FILE' SERVICE_NAME='$SERVICE_NAME' GATEWAY_IMAGE='$IMAGE' GATEWAY_GRPC_PORT='$GATEWAY_GRPC_PORT' bash -se" << 'REMOTE_SCRIPT'
+          "REMOTE_GATEWAY_PATH='$REMOTE_GATEWAY_PATH' COMPOSE_FILE='$COMPOSE_FILE' SERVICE_NAME='$SERVICE_NAME' GATEWAY_GRPC_PORT='$GATEWAY_GRPC_PORT' bash -se" << 'REMOTE_SCRIPT'
         set -euo pipefail
 
         cd "$REMOTE_GATEWAY_PATH"
-
-        cat > "$OVERRIDE_FILE" <<EOF
-        services:
-          academico-gateway:
-            image: ${GATEWAY_IMAGE}
-        EOF
 
         wait_for_service() {
           local service="$1"
@@ -440,7 +428,7 @@ stages:
           local status=""
 
           for attempt in $(seq 1 "$attempts"); do
-            container_id="$(docker compose --env-file .env -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" ps -q "$service" || true)"
+            container_id="$(docker compose --env-file .env -f "$COMPOSE_FILE" ps -q "$service" || true)"
             if [ -n "$container_id" ]; then
               status="$(docker inspect -f '{{.State.Status}}' "$container_id" 2>/dev/null || true)"
               if [ "$status" = "running" ]; then
@@ -452,8 +440,8 @@ stages:
           done
 
           echo "Service $service did not stay running."
-          docker compose --env-file .env -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" ps || true
-          docker compose --env-file .env -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" logs --tail=200 "$service" || true
+          docker compose --env-file .env -f "$COMPOSE_FILE" ps || true
+          docker compose --env-file .env -f "$COMPOSE_FILE" logs --tail=200 "$service" || true
           exit 1
         }
 
@@ -475,22 +463,22 @@ stages:
           done
 
           echo "Gateway is not listening on host gRPC port ${port}."
-          docker compose --env-file .env -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" ps || true
-          docker compose --env-file .env -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" logs --tail=200 "$service" || true
+          docker compose --env-file .env -f "$COMPOSE_FILE" ps || true
+          docker compose --env-file .env -f "$COMPOSE_FILE" logs --tail=200 "$service" || true
           exit 1
         }
 
         echo "Validating compose configuration..."
-        docker compose --env-file .env -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" config >/dev/null
+        docker compose --env-file .env -f "$COMPOSE_FILE" config >/dev/null
 
         echo "Stopping previous gateway container..."
-        docker compose --env-file .env -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" down --remove-orphans || true
+        docker compose --env-file .env -f "$COMPOSE_FILE" down --remove-orphans || true
 
         echo "Pulling gateway image..."
-        docker compose --env-file .env -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" pull "$SERVICE_NAME"
+        docker compose --env-file .env -f "$COMPOSE_FILE" pull "$SERVICE_NAME"
 
         echo "Starting gateway service..."
-        docker compose --env-file .env -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" up -d --remove-orphans --no-build "$SERVICE_NAME"
+        docker compose --env-file .env -f "$COMPOSE_FILE" up -d --remove-orphans --no-build "$SERVICE_NAME"
 
         echo "Verifying gateway service..."
         container_id="$(wait_for_service "$SERVICE_NAME")"
@@ -507,7 +495,7 @@ stages:
         wait_for_host_port "$SERVICE_NAME" "$GATEWAY_GRPC_PORT"
         echo "Gateway is listening on host gRPC port ${GATEWAY_GRPC_PORT}."
 
-        docker compose --env-file .env -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" ps
+        docker compose --env-file .env -f "$COMPOSE_FILE" ps
         docker image prune -f
 
         echo "Production deployment completed."
