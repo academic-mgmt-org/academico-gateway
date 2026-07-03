@@ -551,3 +551,4 @@ stages:
         CATALOGO_BASE_URL: http://$(prodMicroservicesHost):3003
         NOTIFICACIONES_BASE_URL: http://$(prodMicroservicesHost):3003
         GATEWAY_GRPC_PORT: $(grpcPort)
+        PUBLIC_GRPC_HOST: $(prodGatewayHost)
