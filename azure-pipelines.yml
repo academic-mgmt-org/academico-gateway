@@ -202,6 +202,29 @@ stages:
           exit 1
         }
 
+        wait_for_host_port() {
+          local service="$1"
+          local port="$2"
+          local attempts=24
+
+          for attempt in $(seq 1 "$attempts"); do
+            if command -v nc >/dev/null 2>&1; then
+              if nc -z 127.0.0.1 "$port"; then
+                return 0
+              fi
+            elif timeout 5 bash -c "cat < /dev/null > /dev/tcp/127.0.0.1/${port}"; then
+              return 0
+            fi
+
+            sleep 5
+          done
+
+          echo "Gateway is not listening on host gRPC port ${port}."
+          docker compose --env-file .env -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" ps || true
+          docker compose --env-file .env -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" logs --tail=200 "$service" || true
+          exit 1
+        }
+
         echo "Validating compose configuration..."
         docker compose --env-file .env -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" config >/dev/null
 
@@ -226,17 +249,7 @@ stages:
           docker port "$container_id" || true
           exit 1
         fi
-        if command -v nc >/dev/null 2>&1; then
-          if ! nc -z 127.0.0.1 "$GATEWAY_GRPC_PORT"; then
-            echo "Gateway is not listening on host gRPC port ${GATEWAY_GRPC_PORT}."
-            exit 1
-          fi
-        else
-          if ! timeout 5 bash -c "cat < /dev/null > /dev/tcp/127.0.0.1/${GATEWAY_GRPC_PORT}"; then
-            echo "Gateway is not listening on host gRPC port ${GATEWAY_GRPC_PORT}."
-            exit 1
-          fi
-        fi
+        wait_for_host_port "$SERVICE_NAME" "$GATEWAY_GRPC_PORT"
         echo "Gateway is listening on host gRPC port ${GATEWAY_GRPC_PORT}."
 
         docker compose --env-file .env -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" ps
@@ -444,6 +457,29 @@ stages:
           exit 1
         }
 
+        wait_for_host_port() {
+          local service="$1"
+          local port="$2"
+          local attempts=24
+
+          for attempt in $(seq 1 "$attempts"); do
+            if command -v nc >/dev/null 2>&1; then
+              if nc -z 127.0.0.1 "$port"; then
+                return 0
+              fi
+            elif timeout 5 bash -c "cat < /dev/null > /dev/tcp/127.0.0.1/${port}"; then
+              return 0
+            fi
+
+            sleep 5
+          done
+
+          echo "Gateway is not listening on host gRPC port ${port}."
+          docker compose --env-file .env -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" ps || true
+          docker compose --env-file .env -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" logs --tail=200 "$service" || true
+          exit 1
+        }
+
         echo "Validating compose configuration..."
         docker compose --env-file .env -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" config >/dev/null
 
@@ -468,17 +504,7 @@ stages:
           docker port "$container_id" || true
           exit 1
         fi
-        if command -v nc >/dev/null 2>&1; then
-          if ! nc -z 127.0.0.1 "$GATEWAY_GRPC_PORT"; then
-            echo "Gateway is not listening on host gRPC port ${GATEWAY_GRPC_PORT}."
-            exit 1
-          fi
-        else
-          if ! timeout 5 bash -c "cat < /dev/null > /dev/tcp/127.0.0.1/${GATEWAY_GRPC_PORT}"; then
-            echo "Gateway is not listening on host gRPC port ${GATEWAY_GRPC_PORT}."
-            exit 1
-          fi
-        fi
+        wait_for_host_port "$SERVICE_NAME" "$GATEWAY_GRPC_PORT"
         echo "Gateway is listening on host gRPC port ${GATEWAY_GRPC_PORT}."
 
         docker compose --env-file .env -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" ps
