@@ -40,8 +40,8 @@ describe('GrpcProxyServer', () => {
       MATRICULAS_API_KEY: 'matriculas-key',
       CALIFICACIONES_BASE_URL: 'http://academico-calificaciones:3004',
       CALIFICACIONES_API_KEY: 'calificaciones-key',
-      SOLICITUDES_BASE_URL: 'http://academico-solicitudes:3006',
-      SOLICITUDES_API_KEY: 'solicitudes-key',
+      NOTIFICACIONES_BASE_URL: 'http://academico-notificaciones:3003',
+      NOTIFICACIONES_API_KEY: 'notificaciones-key',
     };
 
     expect(resolveGrpcProxyRoute('usuarios.v1.HealthService', env)).toMatchObject({
@@ -60,9 +60,9 @@ describe('GrpcProxyServer', () => {
       apiKey: 'calificaciones-key',
     });
     expect(resolveGrpcProxyRoute('grpc.health.v1.Health', env)).toMatchObject({
-      routeName: 'solicitudes',
-      target: 'academico-solicitudes:3006',
-      apiKey: 'solicitudes-key',
+      routeName: 'notificaciones',
+      target: 'academico-notificaciones:3003',
+      apiKey: 'notificaciones-key',
     });
   });
 

@@ -63,9 +63,9 @@ const ROUTE_PREFIXES = [
   },
   {
     prefix: 'grpc.health.v1.',
-    routeName: 'solicitudes',
-    baseUrlEnv: 'SOLICITUDES_BASE_URL',
-    apiKeyEnv: 'SOLICITUDES_API_KEY',
+    routeName: 'notificaciones',
+    baseUrlEnv: 'NOTIFICACIONES_BASE_URL',
+    apiKeyEnv: 'NOTIFICACIONES_API_KEY',
   },
 ];
 
