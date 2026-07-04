@@ -1,0 +1,28 @@
+syntax = "proto3";
+package usuarios.v1;
+
+message Empty {}
+
+message HealthResponse {
+  string status = 1;
+  string service = 2;
+  string timestamp = 3;
+  double uptime = 4;
+}
+
+message ReadyResponse {
+  bool ready = 1;
+  string timestamp = 2;
+}
+
+message LiveResponse {
+  bool alive = 1;
+  string timestamp = 2;
+  double uptime = 3;
+}
+
+service HealthService {
+  rpc Health(Empty) returns (HealthResponse) {}
+  rpc Ready(Empty) returns (ReadyResponse) {}
+  rpc Live(Empty) returns (LiveResponse) {}
+}

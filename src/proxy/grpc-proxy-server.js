@@ -8,7 +8,11 @@ const PROTO_ROOT = join(__dirname, '..', 'proto');
 const PROTO_PATHS = [
   join(PROTO_ROOT, 'auth.proto'),
   join(PROTO_ROOT, 'catalogo/v1/catalogo.proto'),
+  join(PROTO_ROOT, 'usuarios/v1/usuarios.proto'),
+  join(PROTO_ROOT, 'matriculas/v1/matriculas.proto'),
+  join(PROTO_ROOT, 'calificaciones/v1/calificaciones.proto'),
   join(PROTO_ROOT, 'notificaciones/v1/notificaciones.proto'),
+  join(PROTO_ROOT, 'grpc/health/v1/health.proto'),
 ];
 
 const PROTO_LOADER_OPTIONS = {
@@ -38,6 +42,30 @@ const ROUTE_PREFIXES = [
     routeName: 'notificaciones',
     baseUrlEnv: 'NOTIFICACIONES_BASE_URL',
     apiKeyEnv: 'NOTIFICACIONES_API_KEY',
+  },
+  {
+    prefix: 'usuarios.v1.',
+    routeName: 'usuarios',
+    baseUrlEnv: 'USUARIOS_BASE_URL',
+    apiKeyEnv: 'USUARIOS_API_KEY',
+  },
+  {
+    prefix: 'matriculas.v1.',
+    routeName: 'matriculas',
+    baseUrlEnv: 'MATRICULAS_BASE_URL',
+    apiKeyEnv: 'MATRICULAS_API_KEY',
+  },
+  {
+    prefix: 'calificaciones.v1.',
+    routeName: 'calificaciones',
+    baseUrlEnv: 'CALIFICACIONES_BASE_URL',
+    apiKeyEnv: 'CALIFICACIONES_API_KEY',
+  },
+  {
+    prefix: 'grpc.health.v1.',
+    routeName: 'solicitudes',
+    baseUrlEnv: 'SOLICITUDES_BASE_URL',
+    apiKeyEnv: 'SOLICITUDES_API_KEY',
   },
 ];
 
