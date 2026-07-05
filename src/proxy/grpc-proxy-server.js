@@ -23,6 +23,14 @@ const PROTO_LOADER_OPTIONS = {
   includeDirs: [PROTO_ROOT],
 };
 
+const STANDARD_HEALTH_SERVICE_NAME = 'grpc.health.v1.Health';
+const STANDARD_HEALTH_SERVING_STATUS = {
+  UNKNOWN: 'UNKNOWN',
+  SERVING: 'SERVING',
+  NOT_SERVING: 'NOT_SERVING',
+  SERVICE_UNKNOWN: 'SERVICE_UNKNOWN',
+};
+
 const ROUTE_PREFIXES = [
   {
     prefix: 'auth.v1.',
@@ -54,11 +62,88 @@ const ROUTE_PREFIXES = [
     baseUrlEnv: 'CALIFICACIONES_BASE_URL',
     apiKeyEnv: 'CALIFICACIONES_API_KEY',
   },
+];
+
+const STANDARD_HEALTH_ROUTES = [
   {
-    prefix: 'grpc.health.v1.',
+    routeName: 'login',
+    baseUrlEnv: 'LOGIN_BASE_URL',
+    apiKeyEnv: 'LOGIN_API_KEY',
+    customHealthServiceName: 'auth.v1.HealthService',
+    aliases: [
+      'login',
+      'auth',
+      'autenticacion',
+      'academico-login',
+      'academico-auth',
+      'auth.v1.AuthService',
+      'auth.v1.HealthService',
+    ],
+  },
+  {
     routeName: 'notificaciones',
     baseUrlEnv: 'NOTIFICACIONES_BASE_URL',
     apiKeyEnv: 'NOTIFICACIONES_API_KEY',
+    customHealthServiceName: 'notificaciones.v1.HealthService',
+    aliases: [
+      'notificaciones',
+      'notificacion',
+      'notifications',
+      'academico-notificaciones',
+      'notificaciones.v1.NotificationService',
+      'notificaciones.v1.EmailService',
+      'notificaciones.v1.HealthService',
+    ],
+  },
+  {
+    routeName: 'usuarios',
+    baseUrlEnv: 'USUARIOS_BASE_URL',
+    apiKeyEnv: 'USUARIOS_API_KEY',
+    customHealthServiceName: 'usuarios.v1.HealthService',
+    aliases: [
+      'usuarios',
+      'usuario',
+      'users',
+      'academico-usuarios',
+      'usuarios.v1.HealthService',
+    ],
+  },
+  {
+    routeName: 'matriculas',
+    baseUrlEnv: 'MATRICULAS_BASE_URL',
+    apiKeyEnv: 'MATRICULAS_API_KEY',
+    customHealthServiceName: 'matriculas.v1.HealthService',
+    aliases: [
+      'matriculas',
+      'matricula',
+      'enrollments',
+      'academico-matriculas',
+      'matriculas.v1.HealthService',
+    ],
+  },
+  {
+    routeName: 'calificaciones',
+    baseUrlEnv: 'CALIFICACIONES_BASE_URL',
+    apiKeyEnv: 'CALIFICACIONES_API_KEY',
+    customHealthServiceName: 'calificaciones.v1.HealthService',
+    aliases: [
+      'calificaciones',
+      'calificacion',
+      'grades',
+      'academico-calificaciones',
+      'calificaciones.v1.HealthService',
+    ],
+  },
+  {
+    routeName: 'solicitudes',
+    baseUrlEnv: 'SOLICITUDES_BASE_URL',
+    apiKeyEnv: 'SOLICITUDES_API_KEY',
+    aliases: [
+      'solicitudes',
+      'solicitud',
+      'requests',
+      'academico-solicitudes',
+    ],
   },
 ];
 
@@ -107,6 +192,17 @@ export function normalizeGrpcTarget(baseUrl) {
   return baseUrl.replace(/^https?:\/\//, '').replace(/\/+$/, '');
 }
 
+function buildRoute(routeConfig, env = process.env) {
+  const baseUrl = env[routeConfig.baseUrlEnv] || '';
+
+  return {
+    ...routeConfig,
+    baseUrl,
+    target: normalizeGrpcTarget(baseUrl),
+    apiKey: env[routeConfig.apiKeyEnv] || '',
+  };
+}
+
 export function resolveGrpcProxyRoute(serviceName, env = process.env) {
   const route = ROUTE_PREFIXES.find((candidate) => serviceName.startsWith(candidate.prefix));
 
@@ -114,14 +210,51 @@ export function resolveGrpcProxyRoute(serviceName, env = process.env) {
     return null;
   }
 
-  const baseUrl = env[route.baseUrlEnv] || '';
+  return buildRoute(route, env);
+}
 
-  return {
-    ...route,
-    baseUrl,
-    target: normalizeGrpcTarget(baseUrl),
-    apiKey: env[route.apiKeyEnv] || '',
-  };
+function normalizeHealthServiceName(serviceName) {
+  return String(serviceName || '').trim().toLowerCase();
+}
+
+function tokenizeHealthServiceName(serviceName) {
+  return normalizeHealthServiceName(serviceName)
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+}
+
+function healthAliasMatches(serviceName, alias) {
+  const normalizedServiceName = normalizeHealthServiceName(serviceName);
+  const normalizedAlias = normalizeHealthServiceName(alias);
+
+  if (!normalizedServiceName || !normalizedAlias) {
+    return false;
+  }
+
+  if (normalizedServiceName === normalizedAlias) {
+    return true;
+  }
+
+  const aliasTokens = tokenizeHealthServiceName(normalizedAlias);
+  const serviceTokens = tokenizeHealthServiceName(normalizedServiceName);
+
+  if (aliasTokens.length === 1) {
+    return serviceTokens.includes(aliasTokens[0]);
+  }
+
+  return normalizedServiceName.includes(normalizedAlias);
+}
+
+export function resolveGrpcHealthRoute(serviceName, env = process.env) {
+  const route = STANDARD_HEALTH_ROUTES.find((candidate) => (
+    candidate.aliases.some((alias) => healthAliasMatches(serviceName, alias))
+  ));
+
+  if (!route) {
+    return null;
+  }
+
+  return buildRoute(route, env);
 }
 
 export function createUpstreamMetadata(clientMetadata, apiKey) {
@@ -229,6 +362,13 @@ function createProxyClient(serviceName, serviceDefinition, route, logger) {
   }, `[gRPC proxy] ${serviceName} -> ${route.target}`);
 
   return client;
+}
+
+function createClientEntry(serviceName, serviceDefinition, route, logger) {
+  return {
+    route,
+    client: createProxyClient(serviceName, serviceDefinition, route, logger),
+  };
 }
 
 function createUnaryProxyHandler({ client, methodName, route, logger }) {
@@ -349,14 +489,259 @@ function createProxyImplementation({ serviceName, serviceDefinition, route, logg
   return implementation;
 }
 
+function getCustomHealthMethodName(serviceName) {
+  const tokens = tokenizeHealthServiceName(serviceName);
+
+  if (tokens.includes('readiness') || tokens.includes('ready')) {
+    return 'Ready';
+  }
+
+  if (tokens.includes('liveness') || tokens.includes('live')) {
+    return 'Live';
+  }
+
+  return 'Health';
+}
+
+function mapCustomHealthResponseToStatus(methodName, response) {
+  if (methodName === 'Ready') {
+    return response?.ready
+      ? STANDARD_HEALTH_SERVING_STATUS.SERVING
+      : STANDARD_HEALTH_SERVING_STATUS.NOT_SERVING;
+  }
+
+  if (methodName === 'Live') {
+    return response?.alive
+      ? STANDARD_HEALTH_SERVING_STATUS.SERVING
+      : STANDARD_HEALTH_SERVING_STATUS.NOT_SERVING;
+  }
+
+  const status = String(response?.status || '').trim().toLowerCase();
+  if (['serving', 'healthy', 'ok', 'up'].includes(status)) {
+    return STANDARD_HEALTH_SERVING_STATUS.SERVING;
+  }
+
+  return STANDARD_HEALTH_SERVING_STATUS.NOT_SERVING;
+}
+
+function shouldFallbackToCustomHealth(error, response) {
+  return (
+    error?.code === grpc.status.UNIMPLEMENTED ||
+    response?.status === STANDARD_HEALTH_SERVING_STATUS.SERVICE_UNKNOWN
+  );
+}
+
+function createHealthClientMap({ packageDefinition, serviceName, routes, logger }) {
+  const serviceDefinition = packageDefinition[serviceName];
+  const clients = new Map();
+
+  if (!isServiceDefinition(serviceDefinition)) {
+    return clients;
+  }
+
+  for (const routeConfig of routes) {
+    const route = buildRoute(routeConfig);
+
+    if (!route.target) {
+      continue;
+    }
+
+    clients.set(route.routeName, createClientEntry(serviceName, serviceDefinition, route, logger));
+  }
+
+  return clients;
+}
+
+function createCustomHealthClientMap({ packageDefinition, logger }) {
+  const clients = new Map();
+
+  for (const routeConfig of STANDARD_HEALTH_ROUTES) {
+    if (!routeConfig.customHealthServiceName) {
+      continue;
+    }
+
+    const serviceDefinition = packageDefinition[routeConfig.customHealthServiceName];
+    const route = buildRoute(routeConfig);
+
+    if (!route.target || !isServiceDefinition(serviceDefinition)) {
+      continue;
+    }
+
+    clients.set(
+      route.routeName,
+      createClientEntry(routeConfig.customHealthServiceName, serviceDefinition, route, logger),
+    );
+  }
+
+  return clients;
+}
+
+function respondWithCustomHealth({
+  call,
+  callback,
+  logger,
+  route,
+  requestedService,
+  customHealthClients,
+  fallbackStatus = STANDARD_HEALTH_SERVING_STATUS.NOT_SERVING,
+}) {
+  const entry = customHealthClients.get(route.routeName);
+  const methodName = getCustomHealthMethodName(requestedService);
+
+  if (!entry?.client || typeof entry.client[methodName] !== 'function') {
+    callback(null, { status: fallbackStatus });
+    return;
+  }
+
+  const upstreamMetadata = createUpstreamMetadata(call.metadata, route.apiKey);
+  const upstreamCall = entry.client[methodName]({}, upstreamMetadata, (error, response) => {
+    if (error) {
+      log(logger, 'warn', {
+        context: 'GrpcProxyServer',
+        event: 'standard_health_custom_fallback_error',
+        service: requestedService,
+        routeName: route.routeName,
+        methodName,
+        code: error.code,
+        details: error.details || error.message,
+      }, `[gRPC proxy] Error en fallback health ${route.routeName}.${methodName}: ${error.details || error.message}`);
+
+      callback(null, { status: STANDARD_HEALTH_SERVING_STATUS.NOT_SERVING });
+      return;
+    }
+
+    callback(null, { status: mapCustomHealthResponseToStatus(methodName, response) });
+  });
+
+  attachCancellation(call, upstreamCall);
+}
+
+function createStandardHealthImplementation({ packageDefinition, logger }) {
+  const standardHealthClients = createHealthClientMap({
+    packageDefinition,
+    serviceName: STANDARD_HEALTH_SERVICE_NAME,
+    routes: STANDARD_HEALTH_ROUTES,
+    logger,
+  });
+  const customHealthClients = createCustomHealthClientMap({ packageDefinition, logger });
+
+  return {
+    Check(call, callback) {
+      const requestedService = call.request?.service || '';
+
+      if (!requestedService) {
+        callback(null, { status: STANDARD_HEALTH_SERVING_STATUS.SERVING });
+        return;
+      }
+
+      const route = resolveGrpcHealthRoute(requestedService);
+
+      if (!route) {
+        callback(null, { status: STANDARD_HEALTH_SERVING_STATUS.SERVICE_UNKNOWN });
+        return;
+      }
+
+      if (!route.target) {
+        log(logger, 'warn', {
+          context: 'GrpcProxyServer',
+          event: 'standard_health_route_unconfigured',
+          service: requestedService,
+          routeName: route.routeName,
+          baseUrlEnv: route.baseUrlEnv,
+        }, `[gRPC proxy] ${route.baseUrlEnv} no esta configurado para health ${requestedService}.`);
+
+        callback(null, { status: STANDARD_HEALTH_SERVING_STATUS.NOT_SERVING });
+        return;
+      }
+
+      const entry = standardHealthClients.get(route.routeName);
+
+      if (!entry?.client || typeof entry.client.Check !== 'function') {
+        respondWithCustomHealth({
+          call,
+          callback,
+          logger,
+          route,
+          requestedService,
+          customHealthClients,
+        });
+        return;
+      }
+
+      const upstreamMetadata = createUpstreamMetadata(call.metadata, route.apiKey);
+      const upstreamCall = entry.client.Check(call.request, upstreamMetadata, (error, response) => {
+        if (!error && !shouldFallbackToCustomHealth(error, response)) {
+          callback(null, response);
+          return;
+        }
+
+        if (shouldFallbackToCustomHealth(error, response)) {
+          respondWithCustomHealth({
+            call,
+            callback,
+            logger,
+            route,
+            requestedService,
+            customHealthClients,
+            fallbackStatus: response?.status || STANDARD_HEALTH_SERVING_STATUS.NOT_SERVING,
+          });
+          return;
+        }
+
+        log(logger, 'warn', {
+          context: 'GrpcProxyServer',
+          event: 'standard_health_proxy_error',
+          service: requestedService,
+          routeName: route.routeName,
+          code: error.code,
+          details: error.details || error.message,
+        }, `[gRPC proxy] Error en health ${requestedService}: ${error.details || error.message}`);
+
+        callback(null, { status: STANDARD_HEALTH_SERVING_STATUS.NOT_SERVING });
+      });
+
+      attachCancellation(call, upstreamCall);
+    },
+  };
+}
+
 export function loadGatewayPackageDefinition() {
   return protoLoader.loadSync(PROTO_PATHS, PROTO_LOADER_OPTIONS);
+}
+
+export function registerStandardHealthService(server, packageDefinition, logger = console) {
+  const serviceDefinition = packageDefinition[STANDARD_HEALTH_SERVICE_NAME];
+
+  if (!isServiceDefinition(serviceDefinition)) {
+    log(logger, 'warn', {
+      context: 'GrpcProxyServer',
+      event: 'standard_health_definition_missing',
+      serviceName: STANDARD_HEALTH_SERVICE_NAME,
+    }, `[gRPC proxy] No se registro ${STANDARD_HEALTH_SERVICE_NAME}: definicion no encontrada.`);
+    return null;
+  }
+
+  server.addService(
+    serviceDefinition,
+    createStandardHealthImplementation({ packageDefinition, logger }),
+  );
+
+  return {
+    serviceName: STANDARD_HEALTH_SERVICE_NAME,
+    routeName: 'standard-health-dispatcher',
+    target: 'dynamic',
+    methods: Object.keys(serviceDefinition),
+  };
 }
 
 export function registerProxyServices(server, packageDefinition, logger = console) {
   const registeredServices = [];
 
   for (const [serviceName, serviceDefinition] of Object.entries(packageDefinition)) {
+    if (serviceName === STANDARD_HEALTH_SERVICE_NAME) {
+      continue;
+    }
+
     if (!isServiceDefinition(serviceDefinition)) {
       continue;
     }
@@ -401,6 +786,11 @@ export async function startGrpcProxyServer({
   const server = new grpc.Server();
 
   const registeredServices = registerProxyServices(server, packageDefinition, logger);
+  const standardHealthService = registerStandardHealthService(server, packageDefinition, logger);
+  if (standardHealthService) {
+    registeredServices.push(standardHealthService);
+  }
+
   new ReflectionService(packageDefinition).addToServer(server);
 
   const bindAddress = `${host}:${port}`;

@@ -3,6 +3,7 @@ import {
   createUpstreamMetadata,
   loadGatewayPackageDefinition,
   normalizeGrpcTarget,
+  resolveGrpcHealthRoute,
   resolveGrpcProxyRoute,
 } from '../proxy/grpc-proxy-server';
 
@@ -36,7 +37,7 @@ describe('GrpcProxyServer', () => {
     expect(resolveGrpcProxyRoute('catalogo.v1.CatalogoService')).toBeNull();
   });
 
-  it('enruta health gRPC de servicios academicos al upstream correspondiente', () => {
+  it('enruta health custom de servicios academicos al upstream correspondiente', () => {
     const env = {
       USUARIOS_BASE_URL: 'http://academico-usuarios:3002',
       USUARIOS_API_KEY: 'usuarios-key',
@@ -63,11 +64,56 @@ describe('GrpcProxyServer', () => {
       target: 'academico-calificaciones:3004',
       apiKey: 'calificaciones-key',
     });
-    expect(resolveGrpcProxyRoute('grpc.health.v1.Health', env)).toMatchObject({
+    expect(resolveGrpcProxyRoute('grpc.health.v1.Health', env)).toBeNull();
+  });
+
+  it('enruta health gRPC standard segun el nombre de servicio solicitado', () => {
+    const env = {
+      LOGIN_BASE_URL: 'http://academico-login:3001',
+      LOGIN_API_KEY: 'login-key',
+      USUARIOS_BASE_URL: 'http://academico-usuarios:3002',
+      USUARIOS_API_KEY: 'usuarios-key',
+      MATRICULAS_BASE_URL: 'http://academico-matriculas:3005',
+      MATRICULAS_API_KEY: 'matriculas-key',
+      CALIFICACIONES_BASE_URL: 'http://academico-calificaciones:3004',
+      CALIFICACIONES_API_KEY: 'calificaciones-key',
+      NOTIFICACIONES_BASE_URL: 'http://academico-notificaciones:3003',
+      NOTIFICACIONES_API_KEY: 'notificaciones-key',
+      SOLICITUDES_BASE_URL: 'http://academico-solicitudes:3006',
+      SOLICITUDES_API_KEY: 'solicitudes-key',
+    };
+
+    expect(resolveGrpcHealthRoute('academico-usuarios-readiness', env)).toMatchObject({
+      routeName: 'usuarios',
+      target: 'academico-usuarios:3002',
+      apiKey: 'usuarios-key',
+    });
+    expect(resolveGrpcHealthRoute('academico-matriculas-liveness', env)).toMatchObject({
+      routeName: 'matriculas',
+      target: 'academico-matriculas:3005',
+      apiKey: 'matriculas-key',
+    });
+    expect(resolveGrpcHealthRoute('calificaciones.v1.HealthService', env)).toMatchObject({
+      routeName: 'calificaciones',
+      target: 'academico-calificaciones:3004',
+      apiKey: 'calificaciones-key',
+    });
+    expect(resolveGrpcHealthRoute('auth.v1.HealthService', env)).toMatchObject({
+      routeName: 'login',
+      target: 'academico-login:3001',
+      apiKey: 'login-key',
+    });
+    expect(resolveGrpcHealthRoute('academico-notificaciones-readiness', env)).toMatchObject({
       routeName: 'notificaciones',
       target: 'academico-notificaciones:3003',
       apiKey: 'notificaciones-key',
     });
+    expect(resolveGrpcHealthRoute('academico-solicitudes-readiness', env)).toMatchObject({
+      routeName: 'solicitudes',
+      target: 'academico-solicitudes:3006',
+      apiKey: 'solicitudes-key',
+    });
+    expect(resolveGrpcHealthRoute('academico-desconocido-readiness', env)).toBeNull();
   });
 
   it('reemplaza la API key de cliente por la API key interna y conserva authorization', () => {
