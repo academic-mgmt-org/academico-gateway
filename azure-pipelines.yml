@@ -108,16 +108,31 @@ stages:
       path: s
 
     - task: Docker@2
-      displayName: Build and push image to ACR
+      displayName: Login to Azure Container Registry
       inputs:
-        command: buildAndPush
-        repository: $(imageRepository)
-        dockerfile: $(dockerfilePath)
+        command: login
         containerRegistry: $(dockerRegistryServiceConnection)
-        tags: |
-          $(tag)
-          latest
-        addPipelineData: false
+
+    - script: |
+        set -euo pipefail
+
+        image="${CONTAINER_REGISTRY}/${IMAGE_REPOSITORY}"
+
+        docker build \
+          --file "$DOCKERFILE_PATH" \
+          --tag "${image}:${TAG}" \
+          --tag "${image}:latest" \
+          "$BUILD_SOURCES_DIRECTORY"
+
+        docker push "${image}:${TAG}"
+        docker push "${image}:latest"
+      displayName: Build and push image to ACR
+      env:
+        BUILD_SOURCES_DIRECTORY: $(Build.SourcesDirectory)
+        CONTAINER_REGISTRY: $(containerRegistry)
+        DOCKERFILE_PATH: $(dockerfilePath)
+        IMAGE_REPOSITORY: $(imageRepository)
+        TAG: $(tag)
 
 - stage: DeployDevelopment
   displayName: Deploy to development server 20.122.210.230
