@@ -1,5 +1,5 @@
 # Docker
-# Build, publish and deploy academico-gateway image to Azure development and production Kubernetes.
+# Build, publish and deploy academico-gateway image to Azure development and production servers.
 
 trigger:
   branches:
@@ -37,14 +37,6 @@ variables:
   prodGatewayPath: '/home/azureuser/academico-gateway'
   prodSshKey: '/home/azureuser/academico-prod-gateway.pem'
   prodSshKeyFallback: '/home/azureuser/CREDENCIALES/academico-prod-gateway.pem'
-
-  prodK8sSshHost: '20.115.132.131'
-  k8sNamespace: 'academico-prod'
-  k8sManifestDir: '$(Build.SourcesDirectory)/k8s/prod'
-  k8sRemoteManifestPath: '/tmp/academico-gateway-k8s-manifests'
-  imagePullSecretName: 'acr-pull-secret'
-  appSecretName: 'academico-gateway-env'
-  rolloutTimeout: '5m'
 
   productionApprover: 'gacalderonr@utn.edu.ec'
   nodeEnv: 'production'
@@ -490,7 +482,7 @@ stages:
         PUBLIC_GRPC_HOST: $(devGatewayHost)
 
 - stage: ApproveProduction
-  displayName: Approve production Kubernetes deployment
+  displayName: Approve production deployment
   dependsOn: DeployDevelopment
   condition: succeeded()
   jobs:
@@ -506,19 +498,67 @@ stages:
         notifyUsers: $(productionApprover)
         approvers: $(productionApprover)
         allowApproversToApproveTheirOwnRuns: true
-        instructions: 'Approve to deploy academico-gateway to the production Kubernetes cluster on 20.115.132.131.'
+        instructions: 'Approve to deploy academico-gateway to the production gateway server on 20.96.156.43.'
         onTimeout: reject
 
 - stage: DeployProduction
-  displayName: Deploy to production Kubernetes
+  displayName: Deploy to production server 20.96.156.43
   dependsOn: ApproveProduction
   condition: succeeded()
   jobs:
   - job: DeployProduction
-    displayName: Deploy gateway to production Kubernetes
+    displayName: Deploy gateway to production
     pool:
-      vmImage: ubuntu-latest
+      name: $(selfHostedPool)
     steps:
+    - checkout: none
+
+    - script: |
+        set -euo pipefail
+
+        TARGET_MOUNT="${CLEANUP_TARGET_MOUNT:-/}"
+        CACHE_PRUNE_THRESHOLD="${DOCKER_CACHE_PRUNE_THRESHOLD_PERCENT:-75}"
+        FULL_PRUNE_THRESHOLD="${DOCKER_FULL_PRUNE_THRESHOLD_PERCENT:-85}"
+        DOCKER_PRUNE_UNTIL="${DOCKER_PRUNE_UNTIL:-24h}"
+
+        disk_used_percent() {
+          df -P "$TARGET_MOUNT" | awk 'NR==2 { gsub(/%/, "", $5); print $5 }'
+        }
+
+        echo "Disk usage before cleanup:"
+        df -h "$TARGET_MOUNT"
+
+        echo "Cleaning agent temp directory..."
+        if [ -n "${AGENT_TEMPDIRECTORY:-}" ] && [ -d "$AGENT_TEMPDIRECTORY" ]; then
+          find "$AGENT_TEMPDIRECTORY" -mindepth 1 -maxdepth 1 -exec rm -rf {} + || true
+        fi
+
+        used_percent="$(disk_used_percent)"
+        if command -v docker >/dev/null 2>&1 && timeout 15 docker info >/dev/null 2>&1; then
+          if [ "$used_percent" -ge "$FULL_PRUNE_THRESHOLD" ]; then
+            echo "Disk usage is ${used_percent}%; running full Docker prune."
+            docker system prune -af || true
+          elif [ "$used_percent" -ge "$CACHE_PRUNE_THRESHOLD" ]; then
+            echo "Disk usage is ${used_percent}%; pruning Docker cache older than ${DOCKER_PRUNE_UNTIL}."
+            docker container prune -f --filter "until=${DOCKER_PRUNE_UNTIL}" || true
+            docker builder prune -af --filter "until=${DOCKER_PRUNE_UNTIL}" || true
+          else
+            echo "Disk usage is ${used_percent}%; skipping Docker cleanup."
+          fi
+        else
+          echo "Docker is not available to the agent user; skipping Docker cleanup."
+        fi
+
+        echo "Disk usage after cleanup:"
+        df -h "$TARGET_MOUNT"
+      displayName: Free disk space on self-hosted agent
+      env:
+        AGENT_TEMPDIRECTORY: $(Agent.TempDirectory)
+
+    - checkout: self
+      clean: true
+      path: s
+
     - task: Docker@2
       displayName: Login to Azure Container Registry
       inputs:
@@ -526,47 +566,24 @@ stages:
         containerRegistry: $(dockerRegistryServiceConnection)
 
     - script: |
-        bash "$(Build.SourcesDirectory)/scripts/deploy_k8s_production.sh"
-      displayName: Deploy academico-gateway to production Kubernetes
+        bash "$(Build.SourcesDirectory)/scripts/deploy_compose_gateway.sh"
+      displayName: Deploy academico-gateway to production
       env:
         CONTAINER_REGISTRY: $(containerRegistry)
         IMAGE_REPOSITORY: $(imageRepository)
         TAG: $(tag)
-        K8S_SSH_HOST: $(prodK8sSshHost)
-        K8S_SSH_USER: $(sshUser)
-        K8S_SSH_PRIVATE_KEY_B64: $(PROD_SSH_PRIVATE_KEY_B64)
-        K8S_NAMESPACE: $(k8sNamespace)
-        K8S_MANIFEST_DIR: $(k8sManifestDir)
-        K8S_REMOTE_MANIFEST_PATH: $(k8sRemoteManifestPath)
-        K8S_DEPLOYMENT: $(serviceName)
-        K8S_CONTAINER: $(containerName)
-        IMAGE_PULL_SECRET_NAME: $(imagePullSecretName)
-        APP_SECRET_NAME: $(appSecretName)
-        ROLLOUT_TIMEOUT: $(rolloutTimeout)
-        LEGACY_DOCKER_CLEANUP_ENABLED: 'true'
-        LOCAL_PORT_FORWARD_ENABLED: 'true'
-        LOCAL_PORT_FORWARD_ADDRESS: ''
-        APP_PORT: $(GRPC_PORT)
-        POST_ROLLOUT_SMOKE_ENABLED: 'true'
-        POST_ROLLOUT_SMOKE_BASE_URL: '127.0.0.1:$(GRPC_PORT)'
-        POST_ROLLOUT_SMOKE_COMMAND: |
-          set -euo pipefail
-
-          target="${POST_ROLLOUT_SMOKE_BASE_URL:-127.0.0.1:${APP_PORT:-50050}}"
-          timeout_seconds="${POST_ROLLOUT_SMOKE_TIMEOUT_SECONDS:-5}"
-
-          if ! command -v grpcurl >/dev/null 2>&1; then
-            echo "grpcurl is required for the gateway post-rollout smoke test."
-            exit 1
-          fi
-
-          grpcurl -plaintext -max-time "$timeout_seconds" "$target" describe auth.v1.AuthService | grep -q 'ResetPassword'
-        POST_ROLLOUT_SMOKE_ENV_VARIABLE_NAMES: ''
-        POST_ROLLOUT_SMOKE_RETRIES: '12'
-        POST_ROLLOUT_SMOKE_SLEEP_SECONDS: '5'
-        POST_ROLLOUT_SMOKE_TIMEOUT_SECONDS: '5'
+        SSH_HOST: $(prodSshHost)
+        SSH_USER: $(sshUser)
+        SSH_KEY_PATH: $(prodSshKey)
+        SSH_KEY_FALLBACK: $(prodSshKeyFallback)
+        REMOTE_GATEWAY_PATH: $(prodGatewayPath)
+        COMPOSE_FILE: $(composeFile)
+        COMPOSE_SOURCE_FILE: $(Build.SourcesDirectory)/$(composeFile)
+        SERVICE_NAME: $(serviceName)
+        CONTAINER_NAME: $(containerName)
         ENV_VARIABLE_NAMES: $(deploymentEnvVariableNames)
         ENV_BASE_URL_HOST: $(prodMicroservicesHost)
+        DEPLOY_ENVIRONMENT_NAME: production
         NODE_ENV: $(nodeEnv)
         LOG_LEVEL: $(logLevel)
         REDIS_PROTOCOL: $(REDIS_PROTOCOL)
@@ -598,3 +615,4 @@ stages:
         RATE_LIMIT_UPLOAD_ENABLED: $(RATE_LIMIT_UPLOAD_ENABLED)
         RATE_LIMIT_UPLOAD_MAX: $(RATE_LIMIT_UPLOAD_MAX)
         RATE_LIMIT_UPLOAD_WINDOW: $(RATE_LIMIT_UPLOAD_WINDOW)
+        PUBLIC_GRPC_HOST: $(prodGatewayHost)
