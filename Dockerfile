@@ -23,4 +23,4 @@ ENV NODE_ENV=production
 
 RUN npm install --only=production --legacy-peer-deps && npm cache clean --force
 
-CMD ["node", "dist/main"]
+CMD ["node", "dist/main.js"]

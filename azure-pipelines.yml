@@ -262,9 +262,9 @@ stages:
             sleep 5
           done
 
-          echo "Service $service did not stay running."
-          docker compose --env-file .env -f "$COMPOSE_FILE" ps || true
-          docker compose --env-file .env -f "$COMPOSE_FILE" logs --tail=200 "$service" || true
+          echo "Service $service did not stay running." >&2
+          docker compose --env-file .env -f "$COMPOSE_FILE" ps >&2 || true
+          docker compose --env-file .env -f "$COMPOSE_FILE" logs --tail=200 "$service" >&2 || true
           exit 1
         }
 
@@ -285,9 +285,9 @@ stages:
             sleep 5
           done
 
-          echo "Gateway is not listening on host gRPC port ${port}."
-          docker compose --env-file .env -f "$COMPOSE_FILE" ps || true
-          docker compose --env-file .env -f "$COMPOSE_FILE" logs --tail=200 "$service" || true
+          echo "Gateway is not listening on host gRPC port ${port}." >&2
+          docker compose --env-file .env -f "$COMPOSE_FILE" ps >&2 || true
+          docker compose --env-file .env -f "$COMPOSE_FILE" logs --tail=200 "$service" >&2 || true
           exit 1
         }
 
