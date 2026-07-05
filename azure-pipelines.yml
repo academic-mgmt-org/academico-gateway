@@ -22,7 +22,6 @@ variables:
   serviceName: 'academico-gateway'
   containerName: 'academico-gateway'
   composeFile: 'docker-compose.yml'
-  grpcPort: '50050'
   sshUser: 'azureuser'
 
   devSshHost: '20.122.210.230'
@@ -48,6 +47,9 @@ variables:
   rolloutTimeout: '5m'
 
   productionApprover: 'gacalderonr@utn.edu.ec'
+  nodeEnv: 'production'
+  logLevel: 'info'
+  deploymentEnvVariableNames: 'NODE_ENV LOG_LEVEL REDIS_PROTOCOL REDIS_HOST REDIS_PORT REDIS_PASSWORD LOGIN_BASE_URL LOGIN_API_KEY USUARIOS_BASE_URL USUARIOS_API_KEY NOTIFICACIONES_BASE_URL NOTIFICACIONES_API_KEY CALIFICACIONES_BASE_URL CALIFICACIONES_API_KEY MATRICULAS_BASE_URL MATRICULAS_API_KEY SOLICITUDES_BASE_URL SOLICITUDES_API_KEY GATEWAY_TOKEN_CACHE_TTL GATEWAY_WHITELIST_CACHE_TTL ENV GRPC_PORT RATE_LIMIT_IP_ENABLED RATE_LIMIT_IP_MAX RATE_LIMIT_IP_WINDOW RATE_LIMIT_USER_ENABLED RATE_LIMIT_USER_MAX RATE_LIMIT_USER_WINDOW RATE_LIMIT_UPLOAD_ENABLED RATE_LIMIT_UPLOAD_MAX RATE_LIMIT_UPLOAD_WINDOW'
 
 stages:
 - stage: Build
@@ -211,6 +213,26 @@ stages:
           fi
         }
 
+        validate_env_name() {
+          local name="$1"
+          if [[ ! "$name" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+            echo "Invalid environment variable name: $name"
+            exit 1
+          fi
+        }
+
+        write_env_line() {
+          local name="$1"
+          local value="$2"
+
+          if [[ "$value" == *$'\n'* ]]; then
+            echo "Environment variable $name contains a newline and cannot be written to a .env file."
+            exit 1
+          fi
+
+          printf '%s=%s\n' "$name" "$value"
+        }
+
         resolve_ssh_key() {
           local primary="$1"
           local fallback="${2:-}"
@@ -229,7 +251,12 @@ stages:
           return 1
         }
 
-        for name in CONTAINER_REGISTRY IMAGE_REPOSITORY TAG SSH_HOST SSH_USER REMOTE_GATEWAY_PATH COMPOSE_SOURCE_FILE SERVICE_NAME AUTH_API_KEY NOTIFICACIONES_API_KEY GATEWAY_GRPC_PORT LOGIN_BASE_URL NOTIFICACIONES_BASE_URL; do
+        for name in CONTAINER_REGISTRY IMAGE_REPOSITORY TAG SSH_HOST SSH_USER SSH_KEY_PATH REMOTE_GATEWAY_PATH COMPOSE_FILE COMPOSE_SOURCE_FILE SERVICE_NAME ENV_VARIABLE_NAMES GRPC_PORT; do
+          require_env "$name"
+        done
+
+        for name in $ENV_VARIABLE_NAMES; do
+          validate_env_name "$name"
           require_env "$name"
         done
 
@@ -264,14 +291,10 @@ stages:
 
         umask 077
         {
-          printf 'NODE_ENV=production\n'
-          printf 'LOGIN_BASE_URL=%s\n' "$LOGIN_BASE_URL"
-          printf 'LOGIN_API_KEY=%s\n' "$AUTH_API_KEY"
-          printf 'NOTIFICACIONES_BASE_URL=%s\n' "$NOTIFICACIONES_BASE_URL"
-          printf 'NOTIFICACIONES_API_KEY=%s\n' "$NOTIFICACIONES_API_KEY"
-          printf 'GRPC_PORT=%s\n' "$GATEWAY_GRPC_PORT"
-          printf 'GATEWAY_IMAGE=%s\n' "$IMAGE"
-          printf 'LOG_LEVEL=info\n'
+          for name in $ENV_VARIABLE_NAMES; do
+            write_env_line "$name" "${!name}"
+          done
+          write_env_line GATEWAY_IMAGE "$IMAGE"
         } > "$ENV_FILE_LOCAL"
 
         echo "Copying ACR Docker login to development server..."
@@ -284,7 +307,7 @@ stages:
 
         echo "Deploying development gateway container..."
         ssh "${SSH_OPTS[@]}" "$REMOTE" \
-          "REMOTE_GATEWAY_PATH='$REMOTE_GATEWAY_PATH' COMPOSE_FILE='$COMPOSE_FILE' SERVICE_NAME='$SERVICE_NAME' GATEWAY_GRPC_PORT='$GATEWAY_GRPC_PORT' bash -se" << 'REMOTE_SCRIPT'
+          "REMOTE_GATEWAY_PATH='$REMOTE_GATEWAY_PATH' COMPOSE_FILE='$COMPOSE_FILE' SERVICE_NAME='$SERVICE_NAME' GATEWAY_GRPC_PORT='$GRPC_PORT' bash -se" << 'REMOTE_SCRIPT'
         set -euo pipefail
 
         cd "$REMOTE_GATEWAY_PATH"
@@ -374,7 +397,7 @@ stages:
         elif command -v grpcurl >/dev/null 2>&1; then
           echo "Checking gRPC descriptor on development endpoint..."
           for attempt in $(seq 1 12); do
-            if grpcurl -plaintext "${PUBLIC_GRPC_HOST}:${GATEWAY_GRPC_PORT}" describe auth.v1.AuthService 2>/tmp/gateway-grpcurl.err | grep -q 'ResetPassword'; then
+            if grpcurl -plaintext "${PUBLIC_GRPC_HOST}:${GRPC_PORT}" describe auth.v1.AuthService 2>/tmp/gateway-grpcurl.err | grep -q 'ResetPassword'; then
               echo "ResetPassword is available through development gateway."
               exit 0
             fi
@@ -400,11 +423,38 @@ stages:
         COMPOSE_SOURCE_FILE: $(Build.SourcesDirectory)/$(composeFile)
         SERVICE_NAME: $(serviceName)
         CONTAINER_NAME: $(containerName)
-        AUTH_API_KEY: $(USUARIOS_API_KEY)
+        ENV_VARIABLE_NAMES: $(deploymentEnvVariableNames)
+        NODE_ENV: $(nodeEnv)
+        LOG_LEVEL: $(logLevel)
+        REDIS_PROTOCOL: $(REDIS_PROTOCOL)
+        REDIS_HOST: $(REDIS_HOST)
+        REDIS_PORT: $(REDIS_PORT)
+        REDIS_PASSWORD: $(REDIS_PASSWORD)
+        LOGIN_BASE_URL: $(LOGIN_BASE_URL)
+        LOGIN_API_KEY: $(LOGIN_API_KEY)
+        USUARIOS_BASE_URL: $(USUARIOS_BASE_URL)
+        USUARIOS_API_KEY: $(USUARIOS_API_KEY)
+        NOTIFICACIONES_BASE_URL: $(NOTIFICACIONES_BASE_URL)
         NOTIFICACIONES_API_KEY: $(NOTIFICACIONES_API_KEY)
-        LOGIN_BASE_URL: http://$(devMicroservicesHost):3001
-        NOTIFICACIONES_BASE_URL: http://$(devMicroservicesHost):3003
-        GATEWAY_GRPC_PORT: $(grpcPort)
+        CALIFICACIONES_BASE_URL: $(CALIFICACIONES_BASE_URL)
+        CALIFICACIONES_API_KEY: $(CALIFICACIONES_API_KEY)
+        MATRICULAS_BASE_URL: $(MATRICULAS_BASE_URL)
+        MATRICULAS_API_KEY: $(MATRICULAS_API_KEY)
+        SOLICITUDES_BASE_URL: $(SOLICITUDES_BASE_URL)
+        SOLICITUDES_API_KEY: $(SOLICITUDES_API_KEY)
+        GATEWAY_TOKEN_CACHE_TTL: $(GATEWAY_TOKEN_CACHE_TTL)
+        GATEWAY_WHITELIST_CACHE_TTL: $(GATEWAY_WHITELIST_CACHE_TTL)
+        ENV: $(ENV)
+        GRPC_PORT: $(GRPC_PORT)
+        RATE_LIMIT_IP_ENABLED: $(RATE_LIMIT_IP_ENABLED)
+        RATE_LIMIT_IP_MAX: $(RATE_LIMIT_IP_MAX)
+        RATE_LIMIT_IP_WINDOW: $(RATE_LIMIT_IP_WINDOW)
+        RATE_LIMIT_USER_ENABLED: $(RATE_LIMIT_USER_ENABLED)
+        RATE_LIMIT_USER_MAX: $(RATE_LIMIT_USER_MAX)
+        RATE_LIMIT_USER_WINDOW: $(RATE_LIMIT_USER_WINDOW)
+        RATE_LIMIT_UPLOAD_ENABLED: $(RATE_LIMIT_UPLOAD_ENABLED)
+        RATE_LIMIT_UPLOAD_MAX: $(RATE_LIMIT_UPLOAD_MAX)
+        RATE_LIMIT_UPLOAD_WINDOW: $(RATE_LIMIT_UPLOAD_WINDOW)
         PUBLIC_GRPC_HOST: $(devGatewayHost)
 
 - stage: ApproveProduction
@@ -464,9 +514,9 @@ stages:
         LEGACY_DOCKER_CLEANUP_ENABLED: 'true'
         LOCAL_PORT_FORWARD_ENABLED: 'true'
         LOCAL_PORT_FORWARD_ADDRESS: ''
-        APP_PORT: $(grpcPort)
+        APP_PORT: $(GRPC_PORT)
         POST_ROLLOUT_SMOKE_ENABLED: 'true'
-        POST_ROLLOUT_SMOKE_BASE_URL: '127.0.0.1:$(grpcPort)'
+        POST_ROLLOUT_SMOKE_BASE_URL: '127.0.0.1:$(GRPC_PORT)'
         POST_ROLLOUT_SMOKE_COMMAND: |
           set -euo pipefail
 
@@ -483,11 +533,35 @@ stages:
         POST_ROLLOUT_SMOKE_RETRIES: '12'
         POST_ROLLOUT_SMOKE_SLEEP_SECONDS: '5'
         POST_ROLLOUT_SMOKE_TIMEOUT_SECONDS: '5'
-        ENV_VARIABLE_NAMES: NODE_ENV LOGIN_BASE_URL LOGIN_API_KEY NOTIFICACIONES_BASE_URL NOTIFICACIONES_API_KEY GRPC_PORT LOG_LEVEL
-        NODE_ENV: production
-        LOGIN_BASE_URL: http://academico-login:3001
-        LOGIN_API_KEY: $(USUARIOS_API_KEY)
-        NOTIFICACIONES_BASE_URL: http://academico-notificaciones:3003
+        ENV_VARIABLE_NAMES: $(deploymentEnvVariableNames)
+        NODE_ENV: $(nodeEnv)
+        LOG_LEVEL: $(logLevel)
+        REDIS_PROTOCOL: $(REDIS_PROTOCOL)
+        REDIS_HOST: $(REDIS_HOST)
+        REDIS_PORT: $(REDIS_PORT)
+        REDIS_PASSWORD: $(REDIS_PASSWORD)
+        LOGIN_BASE_URL: $(LOGIN_BASE_URL)
+        LOGIN_API_KEY: $(LOGIN_API_KEY)
+        USUARIOS_BASE_URL: $(USUARIOS_BASE_URL)
+        USUARIOS_API_KEY: $(USUARIOS_API_KEY)
+        NOTIFICACIONES_BASE_URL: $(NOTIFICACIONES_BASE_URL)
         NOTIFICACIONES_API_KEY: $(NOTIFICACIONES_API_KEY)
-        GRPC_PORT: $(grpcPort)
-        LOG_LEVEL: info
+        CALIFICACIONES_BASE_URL: $(CALIFICACIONES_BASE_URL)
+        CALIFICACIONES_API_KEY: $(CALIFICACIONES_API_KEY)
+        MATRICULAS_BASE_URL: $(MATRICULAS_BASE_URL)
+        MATRICULAS_API_KEY: $(MATRICULAS_API_KEY)
+        SOLICITUDES_BASE_URL: $(SOLICITUDES_BASE_URL)
+        SOLICITUDES_API_KEY: $(SOLICITUDES_API_KEY)
+        GATEWAY_TOKEN_CACHE_TTL: $(GATEWAY_TOKEN_CACHE_TTL)
+        GATEWAY_WHITELIST_CACHE_TTL: $(GATEWAY_WHITELIST_CACHE_TTL)
+        ENV: $(ENV)
+        GRPC_PORT: $(GRPC_PORT)
+        RATE_LIMIT_IP_ENABLED: $(RATE_LIMIT_IP_ENABLED)
+        RATE_LIMIT_IP_MAX: $(RATE_LIMIT_IP_MAX)
+        RATE_LIMIT_IP_WINDOW: $(RATE_LIMIT_IP_WINDOW)
+        RATE_LIMIT_USER_ENABLED: $(RATE_LIMIT_USER_ENABLED)
+        RATE_LIMIT_USER_MAX: $(RATE_LIMIT_USER_MAX)
+        RATE_LIMIT_USER_WINDOW: $(RATE_LIMIT_USER_WINDOW)
+        RATE_LIMIT_UPLOAD_ENABLED: $(RATE_LIMIT_UPLOAD_ENABLED)
+        RATE_LIMIT_UPLOAD_MAX: $(RATE_LIMIT_UPLOAD_MAX)
+        RATE_LIMIT_UPLOAD_WINDOW: $(RATE_LIMIT_UPLOAD_WINDOW)
