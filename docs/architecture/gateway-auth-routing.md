@@ -32,7 +32,7 @@ sequenceDiagram
     Login-->>Gateway: accessToken, refreshToken
     Gateway-->>Web: JWT
 
-    Web->>Gateway: GET /catalogo/... + Authorization: Bearer JWT
+    Web->>Gateway: GET /usuarios/... + Authorization: Bearer JWT
     Gateway->>Redis: buscar validacion de token
     alt token en cache
         Redis-->>Gateway: identifier, email, sessionId
@@ -100,7 +100,6 @@ Nota: al momento de esta documentacion, el repositorio `academico-web` solo cont
 | `USUARIOS_BASE_URL` | URL base de `academico-usuarios` |
 | `USUARIOS_API_KEY` | API key interna enviada a `academico-usuarios` |
 | `CALIFICACIONES_BASE_URL` | URL base de `academico-calificaciones` |
-| `CATALOGO_BASE_URL` | URL base de `academico-catalogo` |
 | `MATRICULAS_BASE_URL` | URL base de `academico-matriculas` |
 | `SOLICITUDES_BASE_URL` | URL base de `academico-solicitudes` |
 | `GATEWAY_TOKEN_CACHE_TTL` | TTL para validaciones de token |
@@ -127,13 +126,13 @@ El gateway espera que las rutas de microservicios sigan este formato:
 Ejemplo:
 
 ```text
-/catalogo/api/v1/materias
+/usuarios/api/v1/perfiles
 ```
 
 Se reenvia como:
 
 ```text
-{CATALOGO_BASE_URL}/api/v1/materias
+{USUARIOS_BASE_URL}/api/v1/perfiles
 ```
 
 ## Reglas de seguridad

@@ -19,7 +19,6 @@ El gateway:
 
 - Expone servicios gRPC nativos mediante un proxy transparente.
 - Reenvia `auth.v1.*` hacia `academico-login`.
-- Reenvia `catalogo.v1.*` hacia `academico-catalogo`.
 - Reenvia `notificaciones.v1.*` hacia `academico-notificaciones`, incluyendo
   `NotificationService`, `EmailService` y `HealthService`.
 - Agrega `x-api-key` interna al request reenviado y no confia en la API key
@@ -34,8 +33,6 @@ Variables principales:
 
 - `LOGIN_BASE_URL`
 - `LOGIN_API_KEY`
-- `CATALOGO_BASE_URL`
-- `CATALOGO_API_KEY`
 - `NOTIFICACIONES_BASE_URL`
 - `NOTIFICACIONES_API_KEY`
 - `GRPC_PORT`

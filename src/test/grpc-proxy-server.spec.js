@@ -32,6 +32,10 @@ describe('GrpcProxyServer', () => {
     });
   });
 
+  it('no enruta catalogo porque el servicio fue retirado', () => {
+    expect(resolveGrpcProxyRoute('catalogo.v1.CatalogoService')).toBeNull();
+  });
+
   it('enruta health gRPC de servicios academicos al upstream correspondiente', () => {
     const env = {
       USUARIOS_BASE_URL: 'http://academico-usuarios:3002',

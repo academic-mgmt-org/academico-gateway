@@ -3,10 +3,6 @@ export const services = {
     baseUrl: process.env.LOGIN_BASE_URL || '',
     apiKey: process.env.LOGIN_API_KEY || ''
   },
-  catalogo: {
-    baseUrl: process.env.CATALOGO_BASE_URL || '',
-    apiKey: process.env.CATALOGO_API_KEY || ''
-  },
   notificaciones: {
     baseUrl: process.env.NOTIFICACIONES_BASE_URL || '',
     apiKey: process.env.NOTIFICACIONES_API_KEY || ''
@@ -14,6 +10,5 @@ export const services = {
 };
 
 export const securityValidationMap = {
-  login: 'login',
-  catalogo: 'login'
+  login: 'login'
 };

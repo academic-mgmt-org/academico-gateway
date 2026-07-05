@@ -7,7 +7,6 @@ const PROTO_ROOT = join(__dirname, '..', 'proto');
 
 const PROTO_PATHS = [
   join(PROTO_ROOT, 'auth.proto'),
-  join(PROTO_ROOT, 'catalogo/v1/catalogo.proto'),
   join(PROTO_ROOT, 'usuarios/v1/usuarios.proto'),
   join(PROTO_ROOT, 'matriculas/v1/matriculas.proto'),
   join(PROTO_ROOT, 'calificaciones/v1/calificaciones.proto'),
@@ -30,12 +29,6 @@ const ROUTE_PREFIXES = [
     routeName: 'login',
     baseUrlEnv: 'LOGIN_BASE_URL',
     apiKeyEnv: 'LOGIN_API_KEY',
-  },
-  {
-    prefix: 'catalogo.v1.',
-    routeName: 'catalogo',
-    baseUrlEnv: 'CATALOGO_BASE_URL',
-    apiKeyEnv: 'CATALOGO_API_KEY',
   },
   {
     prefix: 'notificaciones.v1.',
