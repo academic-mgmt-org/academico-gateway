@@ -233,6 +233,33 @@ stages:
           printf '%s=%s\n' "$name" "$value"
         }
 
+        rewrite_base_url_host() {
+          local value="$1"
+          local host="$2"
+          local scheme=""
+          local rest=""
+          local authority=""
+          local suffix=""
+          local port=""
+
+          if [[ ! "$value" =~ ^https?:// ]]; then
+            printf '%s\n' "$value"
+            return 0
+          fi
+
+          scheme="${value%%://*}://"
+          rest="${value#*://}"
+          authority="${rest%%/*}"
+          if [[ "$rest" == */* ]]; then
+            suffix="/${rest#*/}"
+          fi
+          if [[ "$authority" == *:* ]]; then
+            port=":${authority##*:}"
+          fi
+
+          printf '%s%s%s%s\n' "$scheme" "$host" "$port" "$suffix"
+        }
+
         resolve_ssh_key() {
           local primary="$1"
           local fallback="${2:-}"
@@ -251,7 +278,7 @@ stages:
           return 1
         }
 
-        for name in CONTAINER_REGISTRY IMAGE_REPOSITORY TAG SSH_HOST SSH_USER SSH_KEY_PATH REMOTE_GATEWAY_PATH COMPOSE_FILE COMPOSE_SOURCE_FILE SERVICE_NAME ENV_VARIABLE_NAMES GRPC_PORT; do
+        for name in CONTAINER_REGISTRY IMAGE_REPOSITORY TAG SSH_HOST SSH_USER SSH_KEY_PATH REMOTE_GATEWAY_PATH COMPOSE_FILE COMPOSE_SOURCE_FILE SERVICE_NAME ENV_VARIABLE_NAMES ENV_BASE_URL_HOST GRPC_PORT; do
           require_env "$name"
         done
 
@@ -292,7 +319,11 @@ stages:
         umask 077
         {
           for name in $ENV_VARIABLE_NAMES; do
-            write_env_line "$name" "${!name}"
+            value="${!name}"
+            if [[ "$name" == *_BASE_URL ]]; then
+              value="$(rewrite_base_url_host "$value" "$ENV_BASE_URL_HOST")"
+            fi
+            write_env_line "$name" "$value"
           done
           write_env_line GATEWAY_IMAGE "$IMAGE"
         } > "$ENV_FILE_LOCAL"
@@ -424,6 +455,7 @@ stages:
         SERVICE_NAME: $(serviceName)
         CONTAINER_NAME: $(containerName)
         ENV_VARIABLE_NAMES: $(deploymentEnvVariableNames)
+        ENV_BASE_URL_HOST: $(devMicroservicesHost)
         NODE_ENV: $(nodeEnv)
         LOG_LEVEL: $(logLevel)
         REDIS_PROTOCOL: $(REDIS_PROTOCOL)
@@ -534,6 +566,7 @@ stages:
         POST_ROLLOUT_SMOKE_SLEEP_SECONDS: '5'
         POST_ROLLOUT_SMOKE_TIMEOUT_SECONDS: '5'
         ENV_VARIABLE_NAMES: $(deploymentEnvVariableNames)
+        ENV_BASE_URL_HOST: $(prodMicroservicesHost)
         NODE_ENV: $(nodeEnv)
         LOG_LEVEL: $(logLevel)
         REDIS_PROTOCOL: $(REDIS_PROTOCOL)

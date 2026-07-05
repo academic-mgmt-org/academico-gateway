@@ -81,6 +81,33 @@ write_env_line() {
   printf '%s=%s\n' "$name" "$value"
 }
 
+rewrite_base_url_host() {
+  local value="$1"
+  local host="$2"
+  local scheme=""
+  local rest=""
+  local authority=""
+  local suffix=""
+  local port=""
+
+  if [[ ! "$value" =~ ^https?:// ]]; then
+    printf '%s\n' "$value"
+    return 0
+  fi
+
+  scheme="${value%%://*}://"
+  rest="${value#*://}"
+  authority="${rest%%/*}"
+  if [[ "$rest" == */* ]]; then
+    suffix="/${rest#*/}"
+  fi
+  if [[ "$authority" == *:* ]]; then
+    port=":${authority##*:}"
+  fi
+
+  printf '%s%s%s%s\n' "$scheme" "$host" "$port" "$suffix"
+}
+
 for name in \
   CONTAINER_REGISTRY \
   IMAGE_REPOSITORY \
@@ -96,6 +123,7 @@ for name in \
   IMAGE_PULL_SECRET_NAME \
   APP_SECRET_NAME \
   APP_PORT \
+  ENV_BASE_URL_HOST \
   ENV_VARIABLE_NAMES; do
   require_env "$name"
 done
@@ -154,7 +182,11 @@ umask 077
 {
   write_env_line PORT "$APP_PORT"
   for name in $ENV_VARIABLE_NAMES; do
-    write_env_line "$name" "${!name}"
+    value="${!name}"
+    if [[ "$name" == *_BASE_URL ]]; then
+      value="$(rewrite_base_url_host "$value" "$ENV_BASE_URL_HOST")"
+    fi
+    write_env_line "$name" "$value"
   done
 } > "$ENV_FILE_LOCAL"
 
