@@ -1,5 +1,5 @@
 # Docker
-# Build, publish and deploy academico-gateway image to Azure development and production servers.
+# Build, publish and deploy academico-gateway image to Azure development and production Kubernetes.
 
 trigger:
   branches:
@@ -38,6 +38,14 @@ variables:
   prodGatewayPath: '/home/azureuser/academico-gateway'
   prodSshKey: '/home/azureuser/academico-prod-gateway.pem'
   prodSshKeyFallback: '/home/azureuser/CREDENCIALES/academico-prod-gateway.pem'
+
+  prodK8sSshHost: '20.115.132.131'
+  k8sNamespace: 'academico-prod'
+  k8sManifestDir: '$(Build.SourcesDirectory)/k8s/prod'
+  k8sRemoteManifestPath: '/tmp/academico-gateway-k8s-manifests'
+  imagePullSecretName: 'acr-pull-secret'
+  appSecretName: 'academico-gateway-env'
+  rolloutTimeout: '5m'
 
   productionApprover: 'gacalderonr@utn.edu.ec'
 
@@ -289,7 +297,7 @@ stages:
         PUBLIC_GRPC_HOST: $(devGatewayHost)
 
 - stage: ApproveProduction
-  displayName: Approve production deployment to 20.96.156.43
+  displayName: Approve production Kubernetes deployment
   dependsOn: DeployDevelopment
   condition: succeeded()
   jobs:
@@ -305,18 +313,18 @@ stages:
         notifyUsers: $(productionApprover)
         approvers: $(productionApprover)
         allowApproversToApproveTheirOwnRuns: true
-        instructions: 'Approve to deploy academico-gateway to production server 20.96.156.43.'
+        instructions: 'Approve to deploy academico-gateway to the production Kubernetes cluster on 20.115.132.131.'
         onTimeout: reject
 
 - stage: DeployProduction
-  displayName: Deploy to production server 20.96.156.43
+  displayName: Deploy to production Kubernetes
   dependsOn: ApproveProduction
   condition: succeeded()
   jobs:
   - job: DeployProduction
-    displayName: Deploy gateway to production
+    displayName: Deploy gateway to production Kubernetes
     pool:
-      name: $(selfHostedPool)
+      vmImage: ubuntu-latest
     steps:
     - task: Docker@2
       displayName: Login to Azure Container Registry
@@ -325,210 +333,50 @@ stages:
         containerRegistry: $(dockerRegistryServiceConnection)
 
     - script: |
-        set -euo pipefail
-
-        require_env() {
-          local name="$1"
-          local value="${!name:-}"
-
-          if [ -z "$value" ] || [[ "$value" == \$\(* ]]; then
-            echo "Missing required environment variable: $name"
-            exit 1
-          fi
-        }
-
-        resolve_ssh_key() {
-          local primary="$1"
-          local fallback="${2:-}"
-
-          if [ -f "$primary" ]; then
-            printf '%s\n' "$primary"
-            return 0
-          fi
-
-          if [ -n "$fallback" ] && [ -f "$fallback" ]; then
-            printf '%s\n' "$fallback"
-            return 0
-          fi
-
-          echo "SSH key not found. Tried: $primary ${fallback:-}" >&2
-          return 1
-        }
-
-        for name in CONTAINER_REGISTRY IMAGE_REPOSITORY TAG SSH_HOST SSH_USER REMOTE_GATEWAY_PATH COMPOSE_SOURCE_FILE SERVICE_NAME AUTH_API_KEY NOTIFICACIONES_API_KEY GATEWAY_GRPC_PORT LOGIN_BASE_URL NOTIFICACIONES_BASE_URL; do
-          require_env "$name"
-        done
-
-        if [ ! -f "$COMPOSE_SOURCE_FILE" ]; then
-          echo "Missing compose source file: $COMPOSE_SOURCE_FILE"
-          exit 1
-        fi
-
-        SSH_KEY="$(resolve_ssh_key "$SSH_KEY_PATH" "$SSH_KEY_FALLBACK")"
-        chmod 600 "$SSH_KEY"
-
-        IMAGE="${CONTAINER_REGISTRY}/${IMAGE_REPOSITORY}:${TAG}"
-        REMOTE="${SSH_USER}@${SSH_HOST}"
-        ENV_FILE_LOCAL="$(mktemp)"
-
-        cleanup() {
-          rm -f "$ENV_FILE_LOCAL"
-        }
-        trap cleanup EXIT
-
-        SSH_OPTS=(
-          -i "$SSH_KEY"
-          -o IdentitiesOnly=yes
-          -o StrictHostKeyChecking=accept-new
-        )
-
-        DOCKER_CONFIG_FILE="${DOCKER_CONFIG:-$HOME/.docker}/config.json"
-        if [ ! -f "$DOCKER_CONFIG_FILE" ]; then
-          echo "Missing Docker config after ACR login: $DOCKER_CONFIG_FILE"
-          exit 1
-        fi
-
-        umask 077
-        {
-          printf 'NODE_ENV=production\n'
-          printf 'LOGIN_BASE_URL=%s\n' "$LOGIN_BASE_URL"
-          printf 'LOGIN_API_KEY=%s\n' "$AUTH_API_KEY"
-          printf 'NOTIFICACIONES_BASE_URL=%s\n' "$NOTIFICACIONES_BASE_URL"
-          printf 'NOTIFICACIONES_API_KEY=%s\n' "$NOTIFICACIONES_API_KEY"
-          printf 'GRPC_PORT=%s\n' "$GATEWAY_GRPC_PORT"
-          printf 'GATEWAY_IMAGE=%s\n' "$IMAGE"
-          printf 'LOG_LEVEL=info\n'
-        } > "$ENV_FILE_LOCAL"
-
-        echo "Copying ACR Docker login to production server..."
-        ssh "${SSH_OPTS[@]}" "$REMOTE" "mkdir -p ~/.docker && umask 077 && cat > ~/.docker/config.json" < "$DOCKER_CONFIG_FILE"
-
-        echo "Updating production .env and compose file..."
-        ssh "${SSH_OPTS[@]}" "$REMOTE" "mkdir -p '$REMOTE_GATEWAY_PATH' && umask 077 && cat > '$REMOTE_GATEWAY_PATH/.env.pipeline'" < "$ENV_FILE_LOCAL"
-        ssh "${SSH_OPTS[@]}" "$REMOTE" "mv '$REMOTE_GATEWAY_PATH/.env.pipeline' '$REMOTE_GATEWAY_PATH/.env' && chmod 600 '$REMOTE_GATEWAY_PATH/.env'"
-        ssh "${SSH_OPTS[@]}" "$REMOTE" "cat > '$REMOTE_GATEWAY_PATH/$COMPOSE_FILE'" < "$COMPOSE_SOURCE_FILE"
-
-        echo "Deploying production gateway container..."
-        ssh "${SSH_OPTS[@]}" "$REMOTE" \
-          "REMOTE_GATEWAY_PATH='$REMOTE_GATEWAY_PATH' COMPOSE_FILE='$COMPOSE_FILE' SERVICE_NAME='$SERVICE_NAME' GATEWAY_GRPC_PORT='$GATEWAY_GRPC_PORT' bash -se" << 'REMOTE_SCRIPT'
-        set -euo pipefail
-
-        cd "$REMOTE_GATEWAY_PATH"
-
-        wait_for_service() {
-          local service="$1"
-          local attempts=24
-          local container_id=""
-          local status=""
-
-          for attempt in $(seq 1 "$attempts"); do
-            container_id="$(docker compose --env-file .env -f "$COMPOSE_FILE" ps -q "$service" || true)"
-            if [ -n "$container_id" ]; then
-              status="$(docker inspect -f '{{.State.Status}}' "$container_id" 2>/dev/null || true)"
-              if [ "$status" = "running" ]; then
-                printf '%s\n' "$container_id"
-                return 0
-              fi
-            fi
-            sleep 5
-          done
-
-          echo "Service $service did not stay running."
-          docker compose --env-file .env -f "$COMPOSE_FILE" ps || true
-          docker compose --env-file .env -f "$COMPOSE_FILE" logs --tail=200 "$service" || true
-          exit 1
-        }
-
-        wait_for_host_port() {
-          local service="$1"
-          local port="$2"
-          local attempts=24
-
-          for attempt in $(seq 1 "$attempts"); do
-            if command -v nc >/dev/null 2>&1; then
-              if nc -z 127.0.0.1 "$port"; then
-                return 0
-              fi
-            elif timeout 5 bash -c "cat < /dev/null > /dev/tcp/127.0.0.1/${port}"; then
-              return 0
-            fi
-
-            sleep 5
-          done
-
-          echo "Gateway is not listening on host gRPC port ${port}."
-          docker compose --env-file .env -f "$COMPOSE_FILE" ps || true
-          docker compose --env-file .env -f "$COMPOSE_FILE" logs --tail=200 "$service" || true
-          exit 1
-        }
-
-        echo "Validating compose configuration..."
-        docker compose --env-file .env -f "$COMPOSE_FILE" config >/dev/null
-
-        echo "Stopping previous gateway container..."
-        docker compose --env-file .env -f "$COMPOSE_FILE" down --remove-orphans || true
-
-        echo "Pulling gateway image..."
-        docker compose --env-file .env -f "$COMPOSE_FILE" pull "$SERVICE_NAME"
-
-        echo "Starting gateway service..."
-        docker compose --env-file .env -f "$COMPOSE_FILE" up -d --remove-orphans --no-build "$SERVICE_NAME"
-
-        echo "Verifying gateway service..."
-        container_id="$(wait_for_service "$SERVICE_NAME")"
-        network_mode="$(docker inspect -f '{{.HostConfig.NetworkMode}}' "$container_id")"
-        if [ "$network_mode" != "host" ]; then
-          echo "Gateway container must use host networking, got: $network_mode"
-          exit 1
-        fi
-        if docker port "$container_id" 2>/dev/null | grep -q .; then
-          echo "Host-networked gateway must not publish Docker ports."
-          docker port "$container_id" || true
-          exit 1
-        fi
-        wait_for_host_port "$SERVICE_NAME" "$GATEWAY_GRPC_PORT"
-        echo "Gateway is listening on host gRPC port ${GATEWAY_GRPC_PORT}."
-
-        docker compose --env-file .env -f "$COMPOSE_FILE" ps
-        docker image prune -f
-
-        echo "Production deployment completed."
-        REMOTE_SCRIPT
-
-        if [ -z "${PUBLIC_GRPC_HOST:-}" ]; then
-          echo "PUBLIC_GRPC_HOST is not set; skipping public descriptor check."
-        elif command -v grpcurl >/dev/null 2>&1; then
-          echo "Checking gRPC descriptor on production endpoint..."
-          for attempt in $(seq 1 12); do
-            if grpcurl -plaintext "${PUBLIC_GRPC_HOST}:${GATEWAY_GRPC_PORT}" describe auth.v1.AuthService 2>/tmp/gateway-grpcurl.err | grep -q 'ResetPassword'; then
-              echo "ResetPassword is available through production gateway."
-              exit 0
-            fi
-            sleep 5
-          done
-          cat /tmp/gateway-grpcurl.err || true
-          echo "ResetPassword was not found on production gateway."
-          exit 1
-        else
-          echo "grpcurl is not installed on the deploy agent; skipping descriptor check."
-        fi
-      displayName: Deploy academico-gateway to production
+        bash "$(Build.SourcesDirectory)/scripts/deploy_k8s_production.sh"
+      displayName: Deploy academico-gateway to production Kubernetes
       env:
         CONTAINER_REGISTRY: $(containerRegistry)
         IMAGE_REPOSITORY: $(imageRepository)
         TAG: $(tag)
-        SSH_HOST: $(prodSshHost)
-        SSH_USER: $(sshUser)
-        SSH_KEY_PATH: $(prodSshKey)
-        SSH_KEY_FALLBACK: $(prodSshKeyFallback)
-        REMOTE_GATEWAY_PATH: $(prodGatewayPath)
-        COMPOSE_FILE: $(composeFile)
-        COMPOSE_SOURCE_FILE: $(Build.SourcesDirectory)/$(composeFile)
-        SERVICE_NAME: $(serviceName)
-        CONTAINER_NAME: $(containerName)
-        AUTH_API_KEY: $(USUARIOS_API_KEY)
+        K8S_SSH_HOST: $(prodK8sSshHost)
+        K8S_SSH_USER: $(sshUser)
+        K8S_SSH_PRIVATE_KEY_B64: $(PROD_SSH_PRIVATE_KEY_B64)
+        K8S_NAMESPACE: $(k8sNamespace)
+        K8S_MANIFEST_DIR: $(k8sManifestDir)
+        K8S_REMOTE_MANIFEST_PATH: $(k8sRemoteManifestPath)
+        K8S_DEPLOYMENT: $(serviceName)
+        K8S_CONTAINER: $(containerName)
+        IMAGE_PULL_SECRET_NAME: $(imagePullSecretName)
+        APP_SECRET_NAME: $(appSecretName)
+        ROLLOUT_TIMEOUT: $(rolloutTimeout)
+        LEGACY_DOCKER_CLEANUP_ENABLED: 'true'
+        LOCAL_PORT_FORWARD_ENABLED: 'true'
+        LOCAL_PORT_FORWARD_ADDRESS: ''
+        APP_PORT: $(grpcPort)
+        POST_ROLLOUT_SMOKE_ENABLED: 'true'
+        POST_ROLLOUT_SMOKE_BASE_URL: '127.0.0.1:$(grpcPort)'
+        POST_ROLLOUT_SMOKE_COMMAND: |
+          set -euo pipefail
+
+          target="${POST_ROLLOUT_SMOKE_BASE_URL:-127.0.0.1:${APP_PORT:-50050}}"
+          timeout_seconds="${POST_ROLLOUT_SMOKE_TIMEOUT_SECONDS:-5}"
+
+          if ! command -v grpcurl >/dev/null 2>&1; then
+            echo "grpcurl is required for the gateway post-rollout smoke test."
+            exit 1
+          fi
+
+          grpcurl -plaintext -max-time "$timeout_seconds" "$target" describe auth.v1.AuthService | grep -q 'ResetPassword'
+        POST_ROLLOUT_SMOKE_ENV_VARIABLE_NAMES: ''
+        POST_ROLLOUT_SMOKE_RETRIES: '12'
+        POST_ROLLOUT_SMOKE_SLEEP_SECONDS: '5'
+        POST_ROLLOUT_SMOKE_TIMEOUT_SECONDS: '5'
+        ENV_VARIABLE_NAMES: NODE_ENV LOGIN_BASE_URL LOGIN_API_KEY NOTIFICACIONES_BASE_URL NOTIFICACIONES_API_KEY GRPC_PORT LOG_LEVEL
+        NODE_ENV: production
+        LOGIN_BASE_URL: http://academico-login:3001
+        LOGIN_API_KEY: $(USUARIOS_API_KEY)
+        NOTIFICACIONES_BASE_URL: http://academico-notificaciones:3003
         NOTIFICACIONES_API_KEY: $(NOTIFICACIONES_API_KEY)
-        LOGIN_BASE_URL: http://$(prodMicroservicesHost):3001
-        NOTIFICACIONES_BASE_URL: http://$(prodMicroservicesHost):3003
-        GATEWAY_GRPC_PORT: $(grpcPort)
-        PUBLIC_GRPC_HOST: $(prodGatewayHost)
+        GRPC_PORT: $(grpcPort)
+        LOG_LEVEL: info
