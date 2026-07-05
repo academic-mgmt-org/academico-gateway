@@ -526,7 +526,7 @@ function mapCustomHealthResponseToStatus(methodName, response) {
 
 function shouldFallbackToCustomHealth(error, response) {
   return (
-    error?.code === grpc.status.UNIMPLEMENTED ||
+    Boolean(error) ||
     response?.status === STANDARD_HEALTH_SERVING_STATUS.SERVICE_UNKNOWN
   );
 }
