@@ -1,0 +1,708 @@
+# Reusable Azure DevOps pipeline template for academico-gateway.
+#
+# Usage:
+# 1. Copy this file to azure-pipelines.yml or create a new pipeline from it.
+# 2. Adjust the parameters below for the Azure DevOps project, ACR service
+#    connection, self-hosted agent pool, gateway hosts, SSH key paths and
+#    production approver.
+# 3. Create the referenced Azure DevOps secret variables before running:
+#    REDIS_PASSWORD, LOGIN_API_KEY, USUARIOS_API_KEY, NOTIFICACIONES_API_KEY,
+#    CALIFICACIONES_API_KEY, MATRICULAS_API_KEY, SOLICITUDES_API_KEY and any
+#    other keys listed in deploymentEnvVariableNames.
+#
+# Runtime model:
+# - Build runs on the self-hosted agent and pushes the image to ACR.
+# - Development deploys automatically to the development gateway VM through SSH
+#   and Docker Compose.
+# - Production waits for ManualValidation, then deploys to the production
+#   gateway VM through SSH and Docker Compose.
+# - The repo must include scripts/deploy_compose_gateway.sh.
+
+parameters:
+- name: dockerRegistryServiceConnection
+  type: string
+  default: '5cffc302-0a35-4b2b-8ea1-04a9ebd67c07'
+
+- name: imageRepository
+  type: string
+  default: 'academicmgmtorgacademicogateway'
+
+- name: containerRegistry
+  type: string
+  default: 'acracademicoutn.azurecr.io'
+
+- name: selfHostedPool
+  type: string
+  default: 'Default'
+
+- name: devSshHost
+  type: string
+  default: '20.122.210.230'
+
+- name: devGatewayHost
+  type: string
+  default: 'academia-dev.eastus2.cloudapp.azure.com'
+
+- name: devMicroservicesHost
+  type: string
+  default: '20.114.139.164'
+
+- name: devGatewayPath
+  type: string
+  default: '/home/azureuser/academico-gateway'
+
+- name: devSshKey
+  type: string
+  default: '/home/azureuser/CREDENCIALES/academico-dev-gateway.pem'
+
+- name: devSshKeyFallback
+  type: string
+  default: '/home/azureuser/academico-dev-gateway.pem'
+
+- name: prodSshHost
+  type: string
+  default: '20.96.156.43'
+
+- name: prodGatewayHost
+  type: string
+  default: 'academia-utn.eastus2.cloudapp.azure.com'
+
+- name: prodMicroservicesHost
+  type: string
+  default: '20.115.132.131'
+
+- name: prodGatewayPath
+  type: string
+  default: '/home/azureuser/academico-gateway'
+
+- name: prodSshKey
+  type: string
+  default: '/home/azureuser/academico-prod-gateway.pem'
+
+- name: prodSshKeyFallback
+  type: string
+  default: '/home/azureuser/CREDENCIALES/academico-prod-gateway.pem'
+
+- name: productionApprover
+  type: string
+  default: 'gacalderonr@utn.edu.ec'
+
+- name: deploymentEnvVariableNames
+  type: string
+  default: 'NODE_ENV LOG_LEVEL REDIS_PROTOCOL REDIS_HOST REDIS_PORT REDIS_PASSWORD LOGIN_BASE_URL LOGIN_API_KEY USUARIOS_BASE_URL USUARIOS_API_KEY NOTIFICACIONES_BASE_URL NOTIFICACIONES_API_KEY CALIFICACIONES_BASE_URL CALIFICACIONES_API_KEY MATRICULAS_BASE_URL MATRICULAS_API_KEY SOLICITUDES_BASE_URL SOLICITUDES_API_KEY GATEWAY_TOKEN_CACHE_TTL GATEWAY_WHITELIST_CACHE_TTL ENV GRPC_PORT RATE_LIMIT_IP_ENABLED RATE_LIMIT_IP_MAX RATE_LIMIT_IP_WINDOW RATE_LIMIT_USER_ENABLED RATE_LIMIT_USER_MAX RATE_LIMIT_USER_WINDOW RATE_LIMIT_UPLOAD_ENABLED RATE_LIMIT_UPLOAD_MAX RATE_LIMIT_UPLOAD_WINDOW'
+
+trigger:
+  branches:
+    include:
+    - main
+
+pr: none
+
+resources:
+- repo: self
+
+variables:
+  dockerRegistryServiceConnection: ${{ parameters.dockerRegistryServiceConnection }}
+  imageRepository: ${{ parameters.imageRepository }}
+  containerRegistry: ${{ parameters.containerRegistry }}
+  dockerfilePath: '$(Build.SourcesDirectory)/Dockerfile'
+  tag: '$(Build.BuildId)'
+  selfHostedPool: ${{ parameters.selfHostedPool }}
+
+  serviceName: 'academico-gateway'
+  containerName: 'academico-gateway'
+  composeFile: 'docker-compose.yml'
+  sshUser: 'azureuser'
+
+  devSshHost: ${{ parameters.devSshHost }}
+  devGatewayHost: ${{ parameters.devGatewayHost }}
+  devMicroservicesHost: ${{ parameters.devMicroservicesHost }}
+  devGatewayPath: ${{ parameters.devGatewayPath }}
+  devSshKey: ${{ parameters.devSshKey }}
+  devSshKeyFallback: ${{ parameters.devSshKeyFallback }}
+
+  prodSshHost: ${{ parameters.prodSshHost }}
+  prodGatewayHost: ${{ parameters.prodGatewayHost }}
+  prodMicroservicesHost: ${{ parameters.prodMicroservicesHost }}
+  prodGatewayPath: ${{ parameters.prodGatewayPath }}
+  prodSshKey: ${{ parameters.prodSshKey }}
+  prodSshKeyFallback: ${{ parameters.prodSshKeyFallback }}
+
+  productionApprover: ${{ parameters.productionApprover }}
+  nodeEnv: 'production'
+  logLevel: 'info'
+  deploymentEnvVariableNames: ${{ parameters.deploymentEnvVariableNames }}
+
+stages:
+- stage: Build
+  displayName: Build and push gateway image
+  condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'), ne(variables['Build.Reason'], 'PullRequest'))
+  jobs:
+  - job: Build
+    displayName: Build and push
+    pool:
+      name: $(selfHostedPool)
+    steps:
+    - checkout: none
+
+    - script: |
+        set -euo pipefail
+
+        TARGET_MOUNT="${CLEANUP_TARGET_MOUNT:-/}"
+        CACHE_PRUNE_THRESHOLD="${DOCKER_CACHE_PRUNE_THRESHOLD_PERCENT:-75}"
+        FULL_PRUNE_THRESHOLD="${DOCKER_FULL_PRUNE_THRESHOLD_PERCENT:-85}"
+        DOCKER_PRUNE_UNTIL="${DOCKER_PRUNE_UNTIL:-24h}"
+
+        disk_used_percent() {
+          df -P "$TARGET_MOUNT" | awk 'NR==2 { gsub(/%/, "", $5); print $5 }'
+        }
+
+        echo "Disk usage before cleanup:"
+        df -h "$TARGET_MOUNT"
+
+        echo "Cleaning agent temp directory..."
+        if [ -n "${AGENT_TEMPDIRECTORY:-}" ] && [ -d "$AGENT_TEMPDIRECTORY" ]; then
+          find "$AGENT_TEMPDIRECTORY" -mindepth 1 -maxdepth 1 -exec rm -rf {} + || true
+        fi
+
+        used_percent="$(disk_used_percent)"
+        if command -v docker >/dev/null 2>&1 && timeout 15 docker info >/dev/null 2>&1; then
+          if [ "$used_percent" -ge "$FULL_PRUNE_THRESHOLD" ]; then
+            echo "Disk usage is ${used_percent}%; running full Docker prune."
+            docker system prune -af || true
+          elif [ "$used_percent" -ge "$CACHE_PRUNE_THRESHOLD" ]; then
+            echo "Disk usage is ${used_percent}%; pruning Docker cache older than ${DOCKER_PRUNE_UNTIL}."
+            docker container prune -f --filter "until=${DOCKER_PRUNE_UNTIL}" || true
+            docker builder prune -af --filter "until=${DOCKER_PRUNE_UNTIL}" || true
+          else
+            echo "Disk usage is ${used_percent}%; skipping Docker cleanup."
+          fi
+        else
+          echo "Docker is not available to the agent user; skipping Docker cleanup."
+        fi
+
+        echo "Disk usage after cleanup:"
+        df -h "$TARGET_MOUNT"
+      displayName: Free disk space on self-hosted agent
+      env:
+        AGENT_TEMPDIRECTORY: $(Agent.TempDirectory)
+
+    - checkout: self
+      clean: true
+      path: s
+
+    - task: Docker@2
+      displayName: Login to Azure Container Registry
+      inputs:
+        command: login
+        containerRegistry: $(dockerRegistryServiceConnection)
+
+    - script: |
+        set -euo pipefail
+
+        image="${CONTAINER_REGISTRY}/${IMAGE_REPOSITORY}"
+
+        docker build \
+          --file "$DOCKERFILE_PATH" \
+          --tag "${image}:${TAG}" \
+          --tag "${image}:latest" \
+          "$BUILD_SOURCES_DIRECTORY"
+
+        docker push "${image}:${TAG}"
+        docker push "${image}:latest"
+      displayName: Build and push image to ACR
+      env:
+        BUILD_SOURCES_DIRECTORY: $(Build.SourcesDirectory)
+        CONTAINER_REGISTRY: $(containerRegistry)
+        DOCKERFILE_PATH: $(dockerfilePath)
+        IMAGE_REPOSITORY: $(imageRepository)
+        TAG: $(tag)
+
+- stage: DeployDevelopment
+  displayName: Deploy to development server $(devSshHost)
+  dependsOn: Build
+  condition: succeeded()
+  jobs:
+  - job: DeployDevelopment
+    displayName: Deploy gateway to development
+    pool:
+      name: $(selfHostedPool)
+    steps:
+    - checkout: none
+
+    - script: |
+        set -euo pipefail
+
+        TARGET_MOUNT="${CLEANUP_TARGET_MOUNT:-/}"
+        CACHE_PRUNE_THRESHOLD="${DOCKER_CACHE_PRUNE_THRESHOLD_PERCENT:-75}"
+        FULL_PRUNE_THRESHOLD="${DOCKER_FULL_PRUNE_THRESHOLD_PERCENT:-85}"
+        DOCKER_PRUNE_UNTIL="${DOCKER_PRUNE_UNTIL:-24h}"
+
+        disk_used_percent() {
+          df -P "$TARGET_MOUNT" | awk 'NR==2 { gsub(/%/, "", $5); print $5 }'
+        }
+
+        echo "Disk usage before cleanup:"
+        df -h "$TARGET_MOUNT"
+
+        echo "Cleaning agent temp directory..."
+        if [ -n "${AGENT_TEMPDIRECTORY:-}" ] && [ -d "$AGENT_TEMPDIRECTORY" ]; then
+          find "$AGENT_TEMPDIRECTORY" -mindepth 1 -maxdepth 1 -exec rm -rf {} + || true
+        fi
+
+        used_percent="$(disk_used_percent)"
+        if command -v docker >/dev/null 2>&1 && timeout 15 docker info >/dev/null 2>&1; then
+          if [ "$used_percent" -ge "$FULL_PRUNE_THRESHOLD" ]; then
+            echo "Disk usage is ${used_percent}%; running full Docker prune."
+            docker system prune -af || true
+          elif [ "$used_percent" -ge "$CACHE_PRUNE_THRESHOLD" ]; then
+            echo "Disk usage is ${used_percent}%; pruning Docker cache older than ${DOCKER_PRUNE_UNTIL}."
+            docker container prune -f --filter "until=${DOCKER_PRUNE_UNTIL}" || true
+            docker builder prune -af --filter "until=${DOCKER_PRUNE_UNTIL}" || true
+          else
+            echo "Disk usage is ${used_percent}%; skipping Docker cleanup."
+          fi
+        else
+          echo "Docker is not available to the agent user; skipping Docker cleanup."
+        fi
+
+        echo "Disk usage after cleanup:"
+        df -h "$TARGET_MOUNT"
+      displayName: Free disk space on self-hosted agent
+      env:
+        AGENT_TEMPDIRECTORY: $(Agent.TempDirectory)
+
+    - checkout: self
+      clean: true
+      path: s
+
+    - task: Docker@2
+      displayName: Login to Azure Container Registry
+      inputs:
+        command: login
+        containerRegistry: $(dockerRegistryServiceConnection)
+
+    - script: |
+        set -euo pipefail
+
+        require_env() {
+          local name="$1"
+          local value="${!name:-}"
+
+          if [ -z "$value" ] || [[ "$value" == \$\(* ]]; then
+            echo "Missing required environment variable: $name"
+            exit 1
+          fi
+        }
+
+        validate_env_name() {
+          local name="$1"
+          if [[ ! "$name" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+            echo "Invalid environment variable name: $name"
+            exit 1
+          fi
+        }
+
+        write_env_line() {
+          local name="$1"
+          local value="$2"
+
+          if [[ "$value" == *$'\n'* ]]; then
+            echo "Environment variable $name contains a newline and cannot be written to a .env file."
+            exit 1
+          fi
+
+          printf '%s=%s\n' "$name" "$value"
+        }
+
+        rewrite_base_url_host() {
+          local value="$1"
+          local host="$2"
+          local scheme=""
+          local rest=""
+          local authority=""
+          local suffix=""
+          local port=""
+
+          if [[ ! "$value" =~ ^https?:// ]]; then
+            printf '%s\n' "$value"
+            return 0
+          fi
+
+          scheme="${value%%://*}://"
+          rest="${value#*://}"
+          authority="${rest%%/*}"
+          if [[ "$rest" == */* ]]; then
+            suffix="/${rest#*/}"
+          fi
+          if [[ "$authority" == *:* ]]; then
+            port=":${authority##*:}"
+          fi
+
+          printf '%s%s%s%s\n' "$scheme" "$host" "$port" "$suffix"
+        }
+
+        resolve_ssh_key() {
+          local primary="$1"
+          local fallback="${2:-}"
+
+          if [ -f "$primary" ]; then
+            printf '%s\n' "$primary"
+            return 0
+          fi
+
+          if [ -n "$fallback" ] && [ -f "$fallback" ]; then
+            printf '%s\n' "$fallback"
+            return 0
+          fi
+
+          echo "SSH key not found. Tried: $primary ${fallback:-}" >&2
+          return 1
+        }
+
+        for name in CONTAINER_REGISTRY IMAGE_REPOSITORY TAG SSH_HOST SSH_USER SSH_KEY_PATH REMOTE_GATEWAY_PATH COMPOSE_FILE COMPOSE_SOURCE_FILE SERVICE_NAME ENV_VARIABLE_NAMES ENV_BASE_URL_HOST GRPC_PORT; do
+          require_env "$name"
+        done
+
+        for name in $ENV_VARIABLE_NAMES; do
+          validate_env_name "$name"
+          require_env "$name"
+        done
+
+        if [ ! -f "$COMPOSE_SOURCE_FILE" ]; then
+          echo "Missing compose source file: $COMPOSE_SOURCE_FILE"
+          exit 1
+        fi
+
+        SSH_KEY="$(resolve_ssh_key "$SSH_KEY_PATH" "$SSH_KEY_FALLBACK")"
+        chmod 600 "$SSH_KEY"
+
+        IMAGE="${CONTAINER_REGISTRY}/${IMAGE_REPOSITORY}:${TAG}"
+        REMOTE="${SSH_USER}@${SSH_HOST}"
+        ENV_FILE_LOCAL="$(mktemp)"
+
+        cleanup() {
+          rm -f "$ENV_FILE_LOCAL"
+        }
+        trap cleanup EXIT
+
+        SSH_OPTS=(
+          -i "$SSH_KEY"
+          -o IdentitiesOnly=yes
+          -o StrictHostKeyChecking=accept-new
+        )
+
+        DOCKER_CONFIG_FILE="${DOCKER_CONFIG:-$HOME/.docker}/config.json"
+        if [ ! -f "$DOCKER_CONFIG_FILE" ]; then
+          echo "Missing Docker config after ACR login: $DOCKER_CONFIG_FILE"
+          exit 1
+        fi
+
+        umask 077
+        {
+          for name in $ENV_VARIABLE_NAMES; do
+            value="${!name}"
+            if [[ "$name" == *_BASE_URL ]]; then
+              value="$(rewrite_base_url_host "$value" "$ENV_BASE_URL_HOST")"
+            fi
+            write_env_line "$name" "$value"
+          done
+          write_env_line GATEWAY_IMAGE "$IMAGE"
+        } > "$ENV_FILE_LOCAL"
+
+        echo "Copying ACR Docker login to development server..."
+        ssh "${SSH_OPTS[@]}" "$REMOTE" "mkdir -p ~/.docker && umask 077 && cat > ~/.docker/config.json" < "$DOCKER_CONFIG_FILE"
+
+        echo "Updating development .env and compose file..."
+        ssh "${SSH_OPTS[@]}" "$REMOTE" "mkdir -p '$REMOTE_GATEWAY_PATH' && umask 077 && cat > '$REMOTE_GATEWAY_PATH/.env.pipeline'" < "$ENV_FILE_LOCAL"
+        ssh "${SSH_OPTS[@]}" "$REMOTE" "mv '$REMOTE_GATEWAY_PATH/.env.pipeline' '$REMOTE_GATEWAY_PATH/.env' && chmod 600 '$REMOTE_GATEWAY_PATH/.env'"
+        ssh "${SSH_OPTS[@]}" "$REMOTE" "cat > '$REMOTE_GATEWAY_PATH/$COMPOSE_FILE'" < "$COMPOSE_SOURCE_FILE"
+
+        echo "Deploying development gateway container..."
+        ssh "${SSH_OPTS[@]}" "$REMOTE" \
+          "REMOTE_GATEWAY_PATH='$REMOTE_GATEWAY_PATH' COMPOSE_FILE='$COMPOSE_FILE' SERVICE_NAME='$SERVICE_NAME' GATEWAY_GRPC_PORT='$GRPC_PORT' bash -se" << 'REMOTE_SCRIPT'
+        set -euo pipefail
+
+        cd "$REMOTE_GATEWAY_PATH"
+
+        wait_for_service() {
+          local service="$1"
+          local attempts=24
+          local container_id=""
+          local status=""
+
+          for attempt in $(seq 1 "$attempts"); do
+            container_id="$(docker compose --env-file .env -f "$COMPOSE_FILE" ps -q "$service" || true)"
+            if [ -n "$container_id" ]; then
+              status="$(docker inspect -f '{{.State.Status}}' "$container_id" 2>/dev/null || true)"
+              if [ "$status" = "running" ]; then
+                printf '%s\n' "$container_id"
+                return 0
+              fi
+            fi
+            sleep 5
+          done
+
+          echo "Service $service did not stay running." >&2
+          docker compose --env-file .env -f "$COMPOSE_FILE" ps >&2 || true
+          docker compose --env-file .env -f "$COMPOSE_FILE" logs --tail=200 "$service" >&2 || true
+          exit 1
+        }
+
+        wait_for_host_port() {
+          local service="$1"
+          local port="$2"
+          local attempts=24
+
+          for attempt in $(seq 1 "$attempts"); do
+            if command -v nc >/dev/null 2>&1; then
+              if nc -z 127.0.0.1 "$port"; then
+                return 0
+              fi
+            elif timeout 5 bash -c "cat < /dev/null > /dev/tcp/127.0.0.1/${port}"; then
+              return 0
+            fi
+
+            sleep 5
+          done
+
+          echo "Gateway is not listening on host gRPC port ${port}." >&2
+          docker compose --env-file .env -f "$COMPOSE_FILE" ps >&2 || true
+          docker compose --env-file .env -f "$COMPOSE_FILE" logs --tail=200 "$service" >&2 || true
+          exit 1
+        }
+
+        echo "Validating compose configuration..."
+        docker compose --env-file .env -f "$COMPOSE_FILE" config >/dev/null
+
+        echo "Stopping previous gateway container..."
+        docker compose --env-file .env -f "$COMPOSE_FILE" down --remove-orphans || true
+
+        echo "Pulling gateway image..."
+        docker compose --env-file .env -f "$COMPOSE_FILE" pull "$SERVICE_NAME"
+
+        echo "Starting gateway service..."
+        docker compose --env-file .env -f "$COMPOSE_FILE" up -d --remove-orphans --no-build "$SERVICE_NAME"
+
+        echo "Verifying gateway service..."
+        container_id="$(wait_for_service "$SERVICE_NAME")"
+        network_mode="$(docker inspect -f '{{.HostConfig.NetworkMode}}' "$container_id")"
+        if [ "$network_mode" != "host" ]; then
+          echo "Gateway container must use host networking, got: $network_mode"
+          exit 1
+        fi
+        if docker port "$container_id" 2>/dev/null | grep -q .; then
+          echo "Host-networked gateway must not publish Docker ports."
+          docker port "$container_id" || true
+          exit 1
+        fi
+        wait_for_host_port "$SERVICE_NAME" "$GATEWAY_GRPC_PORT"
+        echo "Gateway is listening on host gRPC port ${GATEWAY_GRPC_PORT}."
+
+        docker compose --env-file .env -f "$COMPOSE_FILE" ps
+        docker image prune -f
+
+        echo "Development deployment completed."
+        REMOTE_SCRIPT
+
+        if [ -z "${PUBLIC_GRPC_HOST:-}" ]; then
+          echo "PUBLIC_GRPC_HOST is not set; skipping public descriptor check."
+        elif command -v grpcurl >/dev/null 2>&1; then
+          echo "Checking gRPC descriptor on development endpoint..."
+          for attempt in $(seq 1 12); do
+            if grpcurl -plaintext "${PUBLIC_GRPC_HOST}:${GRPC_PORT}" describe auth.v1.AuthService 2>/tmp/gateway-grpcurl.err | grep -q 'ResetPassword'; then
+              echo "ResetPassword is available through development gateway."
+              exit 0
+            fi
+            sleep 5
+          done
+          cat /tmp/gateway-grpcurl.err || true
+          echo "ResetPassword was not found on development gateway."
+          exit 1
+        else
+          echo "grpcurl is not installed on the deploy agent; skipping descriptor check."
+        fi
+      displayName: Deploy academico-gateway to development
+      env:
+        CONTAINER_REGISTRY: $(containerRegistry)
+        IMAGE_REPOSITORY: $(imageRepository)
+        TAG: $(tag)
+        SSH_HOST: $(devSshHost)
+        SSH_USER: $(sshUser)
+        SSH_KEY_PATH: $(devSshKey)
+        SSH_KEY_FALLBACK: $(devSshKeyFallback)
+        REMOTE_GATEWAY_PATH: $(devGatewayPath)
+        COMPOSE_FILE: $(composeFile)
+        COMPOSE_SOURCE_FILE: $(Build.SourcesDirectory)/$(composeFile)
+        SERVICE_NAME: $(serviceName)
+        CONTAINER_NAME: $(containerName)
+        ENV_VARIABLE_NAMES: $(deploymentEnvVariableNames)
+        ENV_BASE_URL_HOST: $(devMicroservicesHost)
+        NODE_ENV: $(nodeEnv)
+        LOG_LEVEL: $(logLevel)
+        REDIS_PROTOCOL: $(REDIS_PROTOCOL)
+        REDIS_HOST: $(REDIS_HOST)
+        REDIS_PORT: $(REDIS_PORT)
+        REDIS_PASSWORD: $(REDIS_PASSWORD)
+        LOGIN_BASE_URL: $(LOGIN_BASE_URL)
+        LOGIN_API_KEY: $(LOGIN_API_KEY)
+        USUARIOS_BASE_URL: $(USUARIOS_BASE_URL)
+        USUARIOS_API_KEY: $(USUARIOS_API_KEY)
+        NOTIFICACIONES_BASE_URL: $(NOTIFICACIONES_BASE_URL)
+        NOTIFICACIONES_API_KEY: $(NOTIFICACIONES_API_KEY)
+        CALIFICACIONES_BASE_URL: $(CALIFICACIONES_BASE_URL)
+        CALIFICACIONES_API_KEY: $(CALIFICACIONES_API_KEY)
+        MATRICULAS_BASE_URL: $(MATRICULAS_BASE_URL)
+        MATRICULAS_API_KEY: $(MATRICULAS_API_KEY)
+        SOLICITUDES_BASE_URL: $(SOLICITUDES_BASE_URL)
+        SOLICITUDES_API_KEY: $(SOLICITUDES_API_KEY)
+        GATEWAY_TOKEN_CACHE_TTL: $(GATEWAY_TOKEN_CACHE_TTL)
+        GATEWAY_WHITELIST_CACHE_TTL: $(GATEWAY_WHITELIST_CACHE_TTL)
+        ENV: $(ENV)
+        GRPC_PORT: $(GRPC_PORT)
+        RATE_LIMIT_IP_ENABLED: $(RATE_LIMIT_IP_ENABLED)
+        RATE_LIMIT_IP_MAX: $(RATE_LIMIT_IP_MAX)
+        RATE_LIMIT_IP_WINDOW: $(RATE_LIMIT_IP_WINDOW)
+        RATE_LIMIT_USER_ENABLED: $(RATE_LIMIT_USER_ENABLED)
+        RATE_LIMIT_USER_MAX: $(RATE_LIMIT_USER_MAX)
+        RATE_LIMIT_USER_WINDOW: $(RATE_LIMIT_USER_WINDOW)
+        RATE_LIMIT_UPLOAD_ENABLED: $(RATE_LIMIT_UPLOAD_ENABLED)
+        RATE_LIMIT_UPLOAD_MAX: $(RATE_LIMIT_UPLOAD_MAX)
+        RATE_LIMIT_UPLOAD_WINDOW: $(RATE_LIMIT_UPLOAD_WINDOW)
+        PUBLIC_GRPC_HOST: $(devGatewayHost)
+
+- stage: ApproveProduction
+  displayName: Approve production deployment
+  dependsOn: DeployDevelopment
+  condition: succeeded()
+  jobs:
+  - job: WaitForProductionApproval
+    displayName: Await production approval
+    pool: server
+    timeoutInMinutes: 1440
+    steps:
+    - task: ManualValidation@1
+      displayName: Approve production deployment
+      timeoutInMinutes: 1440
+      inputs:
+        notifyUsers: $(productionApprover)
+        approvers: $(productionApprover)
+        allowApproversToApproveTheirOwnRuns: true
+        instructions: 'Approve to deploy academico-gateway to the production gateway server on $(prodSshHost).'
+        onTimeout: reject
+
+- stage: DeployProduction
+  displayName: Deploy to production server $(prodSshHost)
+  dependsOn: ApproveProduction
+  condition: succeeded()
+  jobs:
+  - job: DeployProduction
+    displayName: Deploy gateway to production
+    pool:
+      name: $(selfHostedPool)
+    steps:
+    - checkout: none
+
+    - script: |
+        set -euo pipefail
+
+        TARGET_MOUNT="${CLEANUP_TARGET_MOUNT:-/}"
+        CACHE_PRUNE_THRESHOLD="${DOCKER_CACHE_PRUNE_THRESHOLD_PERCENT:-75}"
+        FULL_PRUNE_THRESHOLD="${DOCKER_FULL_PRUNE_THRESHOLD_PERCENT:-85}"
+        DOCKER_PRUNE_UNTIL="${DOCKER_PRUNE_UNTIL:-24h}"
+
+        disk_used_percent() {
+          df -P "$TARGET_MOUNT" | awk 'NR==2 { gsub(/%/, "", $5); print $5 }'
+        }
+
+        echo "Disk usage before cleanup:"
+        df -h "$TARGET_MOUNT"
+
+        echo "Cleaning agent temp directory..."
+        if [ -n "${AGENT_TEMPDIRECTORY:-}" ] && [ -d "$AGENT_TEMPDIRECTORY" ]; then
+          find "$AGENT_TEMPDIRECTORY" -mindepth 1 -maxdepth 1 -exec rm -rf {} + || true
+        fi
+
+        used_percent="$(disk_used_percent)"
+        if command -v docker >/dev/null 2>&1 && timeout 15 docker info >/dev/null 2>&1; then
+          if [ "$used_percent" -ge "$FULL_PRUNE_THRESHOLD" ]; then
+            echo "Disk usage is ${used_percent}%; running full Docker prune."
+            docker system prune -af || true
+          elif [ "$used_percent" -ge "$CACHE_PRUNE_THRESHOLD" ]; then
+            echo "Disk usage is ${used_percent}%; pruning Docker cache older than ${DOCKER_PRUNE_UNTIL}."
+            docker container prune -f --filter "until=${DOCKER_PRUNE_UNTIL}" || true
+            docker builder prune -af --filter "until=${DOCKER_PRUNE_UNTIL}" || true
+          else
+            echo "Disk usage is ${used_percent}%; skipping Docker cleanup."
+          fi
+        else
+          echo "Docker is not available to the agent user; skipping Docker cleanup."
+        fi
+
+        echo "Disk usage after cleanup:"
+        df -h "$TARGET_MOUNT"
+      displayName: Free disk space on self-hosted agent
+      env:
+        AGENT_TEMPDIRECTORY: $(Agent.TempDirectory)
+
+    - checkout: self
+      clean: true
+      path: s
+
+    - task: Docker@2
+      displayName: Login to Azure Container Registry
+      inputs:
+        command: login
+        containerRegistry: $(dockerRegistryServiceConnection)
+
+    - script: |
+        bash "$(Build.SourcesDirectory)/scripts/deploy_compose_gateway.sh"
+      displayName: Deploy academico-gateway to production
+      env:
+        CONTAINER_REGISTRY: $(containerRegistry)
+        IMAGE_REPOSITORY: $(imageRepository)
+        TAG: $(tag)
+        SSH_HOST: $(prodSshHost)
+        SSH_USER: $(sshUser)
+        SSH_KEY_PATH: $(prodSshKey)
+        SSH_KEY_FALLBACK: $(prodSshKeyFallback)
+        REMOTE_GATEWAY_PATH: $(prodGatewayPath)
+        COMPOSE_FILE: $(composeFile)
+        COMPOSE_SOURCE_FILE: $(Build.SourcesDirectory)/$(composeFile)
+        SERVICE_NAME: $(serviceName)
+        CONTAINER_NAME: $(containerName)
+        ENV_VARIABLE_NAMES: $(deploymentEnvVariableNames)
+        ENV_BASE_URL_HOST: $(prodMicroservicesHost)
+        DEPLOY_ENVIRONMENT_NAME: production
+        NODE_ENV: $(nodeEnv)
+        LOG_LEVEL: $(logLevel)
+        REDIS_PROTOCOL: $(REDIS_PROTOCOL)
+        REDIS_HOST: $(REDIS_HOST)
+        REDIS_PORT: $(REDIS_PORT)
+        REDIS_PASSWORD: $(REDIS_PASSWORD)
+        LOGIN_BASE_URL: $(LOGIN_BASE_URL)
+        LOGIN_API_KEY: $(LOGIN_API_KEY)
+        USUARIOS_BASE_URL: $(USUARIOS_BASE_URL)
+        USUARIOS_API_KEY: $(USUARIOS_API_KEY)
+        NOTIFICACIONES_BASE_URL: $(NOTIFICACIONES_BASE_URL)
+        NOTIFICACIONES_API_KEY: $(NOTIFICACIONES_API_KEY)
+        CALIFICACIONES_BASE_URL: $(CALIFICACIONES_BASE_URL)
+        CALIFICACIONES_API_KEY: $(CALIFICACIONES_API_KEY)
+        MATRICULAS_BASE_URL: $(MATRICULAS_BASE_URL)
+        MATRICULAS_API_KEY: $(MATRICULAS_API_KEY)
+        SOLICITUDES_BASE_URL: $(SOLICITUDES_BASE_URL)
+        SOLICITUDES_API_KEY: $(SOLICITUDES_API_KEY)
+        GATEWAY_TOKEN_CACHE_TTL: $(GATEWAY_TOKEN_CACHE_TTL)
+        GATEWAY_WHITELIST_CACHE_TTL: $(GATEWAY_WHITELIST_CACHE_TTL)
+        ENV: $(ENV)
+        GRPC_PORT: $(GRPC_PORT)
+        RATE_LIMIT_IP_ENABLED: $(RATE_LIMIT_IP_ENABLED)
+        RATE_LIMIT_IP_MAX: $(RATE_LIMIT_IP_MAX)
+        RATE_LIMIT_IP_WINDOW: $(RATE_LIMIT_IP_WINDOW)
+        RATE_LIMIT_USER_ENABLED: $(RATE_LIMIT_USER_ENABLED)
+        RATE_LIMIT_USER_MAX: $(RATE_LIMIT_USER_MAX)
+        RATE_LIMIT_USER_WINDOW: $(RATE_LIMIT_USER_WINDOW)
+        RATE_LIMIT_UPLOAD_ENABLED: $(RATE_LIMIT_UPLOAD_ENABLED)
+        RATE_LIMIT_UPLOAD_MAX: $(RATE_LIMIT_UPLOAD_MAX)
+        RATE_LIMIT_UPLOAD_WINDOW: $(RATE_LIMIT_UPLOAD_WINDOW)
+        PUBLIC_GRPC_HOST: $(prodGatewayHost)
