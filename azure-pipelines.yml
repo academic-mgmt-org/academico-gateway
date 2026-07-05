@@ -59,6 +59,41 @@ stages:
     pool:
       name: $(selfHostedPool)
     steps:
+    - checkout: none
+
+    - script: |
+        set -euo pipefail
+
+        echo "Disk usage before cleanup:"
+        df -h /
+
+        if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+          echo "Docker usage before cleanup:"
+          docker system df || true
+
+          docker builder prune -af || true
+          docker image prune -af || true
+          docker container prune -f || true
+
+          echo "Docker usage after cleanup:"
+          docker system df || true
+        else
+          echo "Docker is not available to the agent user; skipping Docker cleanup."
+        fi
+
+        if [ -n "${AGENT_TEMPDIRECTORY:-}" ] && [ -d "$AGENT_TEMPDIRECTORY" ]; then
+          find "$AGENT_TEMPDIRECTORY" -mindepth 1 -maxdepth 1 -exec rm -rf {} + || true
+        fi
+
+        echo "Disk usage after cleanup:"
+        df -h /
+      displayName: Free disk space on self-hosted agent
+      env:
+        AGENT_TEMPDIRECTORY: $(Agent.TempDirectory)
+
+    - checkout: self
+      clean: true
+
     - task: Docker@2
       displayName: Build and push image to ACR
       inputs:
@@ -81,6 +116,41 @@ stages:
     pool:
       name: $(selfHostedPool)
     steps:
+    - checkout: none
+
+    - script: |
+        set -euo pipefail
+
+        echo "Disk usage before cleanup:"
+        df -h /
+
+        if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+          echo "Docker usage before cleanup:"
+          docker system df || true
+
+          docker builder prune -af || true
+          docker image prune -af || true
+          docker container prune -f || true
+
+          echo "Docker usage after cleanup:"
+          docker system df || true
+        else
+          echo "Docker is not available to the agent user; skipping Docker cleanup."
+        fi
+
+        if [ -n "${AGENT_TEMPDIRECTORY:-}" ] && [ -d "$AGENT_TEMPDIRECTORY" ]; then
+          find "$AGENT_TEMPDIRECTORY" -mindepth 1 -maxdepth 1 -exec rm -rf {} + || true
+        fi
+
+        echo "Disk usage after cleanup:"
+        df -h /
+      displayName: Free disk space on self-hosted agent
+      env:
+        AGENT_TEMPDIRECTORY: $(Agent.TempDirectory)
+
+    - checkout: self
+      clean: true
+
     - task: Docker@2
       displayName: Login to Azure Container Registry
       inputs:
