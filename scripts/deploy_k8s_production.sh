@@ -108,6 +108,40 @@ rewrite_base_url_host() {
   printf '%s%s%s%s\n' "$scheme" "$host" "$port" "$suffix"
 }
 
+k8s_internal_service_base_url() {
+  local name="$1"
+
+  case "$name" in
+    LOGIN_BASE_URL) printf '%s\n' 'http://academico-login:3001' ;;
+    USUARIOS_BASE_URL) printf '%s\n' 'http://academico-usuarios:3002' ;;
+    NOTIFICACIONES_BASE_URL) printf '%s\n' 'http://academico-notificaciones:3003' ;;
+    CALIFICACIONES_BASE_URL) printf '%s\n' 'http://academico-calificaciones:3004' ;;
+    MATRICULAS_BASE_URL) printf '%s\n' 'http://academico-matriculas:3005' ;;
+    SOLICITUDES_BASE_URL) printf '%s\n' 'http://academico-solicitudes:3006' ;;
+    *) return 1 ;;
+  esac
+}
+
+is_truthy() {
+  case "${1,,}" in
+    1|true|yes|y|on) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+resolve_base_url_value() {
+  local name="$1"
+  local value="$2"
+  local internal_url=""
+
+  if is_truthy "$K8S_INTERNAL_SERVICE_URLS" && internal_url="$(k8s_internal_service_base_url "$name")"; then
+    printf '%s\n' "$internal_url"
+    return
+  fi
+
+  rewrite_base_url_host "$value" "$ENV_BASE_URL_HOST"
+}
+
 for name in \
   CONTAINER_REGISTRY \
   IMAGE_REPOSITORY \
@@ -129,6 +163,13 @@ for name in \
 done
 
 ROLLOUT_TIMEOUT="${ROLLOUT_TIMEOUT:-5m}"
+K8S_INTERNAL_SERVICE_URLS="${K8S_INTERNAL_SERVICE_URLS:-}"
+if [ -z "$K8S_INTERNAL_SERVICE_URLS" ]; then
+  K8S_INTERNAL_SERVICE_URLS=false
+  if [ "$K8S_DEPLOYMENT" = "academico-gateway" ]; then
+    K8S_INTERNAL_SERVICE_URLS=true
+  fi
+fi
 validate_k8s_name K8S_NAMESPACE "$K8S_NAMESPACE"
 validate_k8s_name K8S_DEPLOYMENT "$K8S_DEPLOYMENT"
 validate_k8s_name K8S_CONTAINER "$K8S_CONTAINER"
@@ -184,7 +225,7 @@ umask 077
   for name in $ENV_VARIABLE_NAMES; do
     value="${!name}"
     if [[ "$name" == *_BASE_URL ]]; then
-      value="$(rewrite_base_url_host "$value" "$ENV_BASE_URL_HOST")"
+      value="$(resolve_base_url_value "$name" "$value")"
     fi
     write_env_line "$name" "$value"
   done
