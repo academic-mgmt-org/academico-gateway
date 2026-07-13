@@ -1,7 +1,152 @@
 syntax = "proto3";
+
 package matriculas.v1;
 
 message Empty {}
+
+message Enrollment {
+  string id = 1;
+  string codigo = 2;
+  string estudiante_id = 3;
+  string estudiante_cedula = 4;
+  string oferta_curso_id = 5;
+  string ciclo_acad_codigo = 6;
+  string materia_codigo = 7;
+  string paralelo_codigo = 8;
+  string docente_cedula = 9;
+  string estado = 10;
+  double nota_final = 11;
+  string observacion = 12;
+  string fecha_matricula = 13;
+  string creado_en = 14;
+  string actualizado_en = 15;
+}
+
+message CreateEnrollmentRequest {
+  string estudiante_id = 1;
+  string oferta_curso_id = 2;
+  string estudiante_cedula = 3;
+  string estado = 4;
+  string observacion = 5;
+}
+
+message GetEnrollmentRequest {
+  string id = 1;
+  string codigo = 2;
+}
+
+message ListEnrollmentsRequest {
+  string estudiante_id = 1;
+  string estudiante_cedula = 2;
+  string oferta_curso_id = 3;
+  string ciclo_acad_codigo = 4;
+  string materia_codigo = 5;
+  string paralelo_codigo = 6;
+  string estado = 7;
+  int32 limit = 8;
+  int32 offset = 9;
+}
+
+message ChangeEnrollmentStatusRequest {
+  string id = 1;
+  string estado = 2;
+  string observacion = 3;
+  double nota_final = 4;
+  bool tiene_nota_final = 5;
+}
+
+message CancelEnrollmentRequest {
+  string id = 1;
+  string observacion = 2;
+}
+
+message EnrollmentResponse {
+  Enrollment enrollment = 1;
+}
+
+message ListEnrollmentsResponse {
+  repeated Enrollment enrollments = 1;
+  int32 total = 2;
+  int32 limit = 3;
+  int32 offset = 4;
+}
+
+message SubjectEnrollment {
+  string codigo = 1;
+  string matricula_codigo = 2;
+  string estudiante_id = 3;
+  string estudiante_cedula = 4;
+  string oferta_curso_id = 5;
+  string ciclo_acad_codigo = 6;
+  string materia_codigo = 7;
+  string paralelo_codigo = 8;
+  string docente_cedula = 9;
+  string nivel_codigo = 10;
+  string depen_codigo = 11;
+  string estado = 12;
+  double nota_final = 13;
+  string creado_en = 14;
+  string actualizado_en = 15;
+}
+
+message CreateSubjectEnrollmentRequest {
+  string codigo = 1;
+  string matricula_codigo = 2;
+  string estudiante_id = 3;
+  string estudiante_cedula = 4;
+  string oferta_curso_id = 5;
+  string ciclo_acad_codigo = 6;
+  string materia_codigo = 7;
+  string paralelo_codigo = 8;
+  string docente_cedula = 9;
+  string nivel_codigo = 10;
+  string depen_codigo = 11;
+  string estado = 12;
+}
+
+message GetSubjectEnrollmentRequest {
+  string codigo = 1;
+}
+
+message ListSubjectEnrollmentsRequest {
+  string codigo = 1;
+  string matricula_codigo = 2;
+  string estudiante_id = 3;
+  string estudiante_cedula = 4;
+  string oferta_curso_id = 5;
+  string ciclo_acad_codigo = 6;
+  string materia_codigo = 7;
+  string paralelo_codigo = 8;
+  string docente_cedula = 9;
+  string estado = 10;
+  int32 limit = 11;
+  int32 offset = 12;
+}
+
+message ChangeSubjectEnrollmentStatusRequest {
+  string codigo = 1;
+  string estado = 2;
+  double nota_final = 3;
+  bool tiene_nota_final = 4;
+}
+
+message SubjectEnrollmentResponse {
+  SubjectEnrollment subject_enrollment = 1;
+}
+
+message ListSubjectEnrollmentsResponse {
+  repeated SubjectEnrollment subject_enrollments = 1;
+  int32 total = 2;
+  int32 limit = 3;
+  int32 offset = 4;
+}
+
+message GenericResponse {
+  bool success = 1;
+  string message = 2;
+  string affected_id = 3;
+  int32 affected = 4;
+}
 
 message HealthResponse {
   string status = 1;
@@ -19,6 +164,21 @@ message LiveResponse {
   bool alive = 1;
   string timestamp = 2;
   double uptime = 3;
+}
+
+service EnrollmentService {
+  rpc CreateEnrollment(CreateEnrollmentRequest) returns (EnrollmentResponse) {}
+  rpc GetEnrollment(GetEnrollmentRequest) returns (EnrollmentResponse) {}
+  rpc ListEnrollments(ListEnrollmentsRequest) returns (ListEnrollmentsResponse) {}
+  rpc ChangeEnrollmentStatus(ChangeEnrollmentStatusRequest) returns (EnrollmentResponse) {}
+  rpc CancelEnrollment(CancelEnrollmentRequest) returns (EnrollmentResponse) {}
+}
+
+service SubjectEnrollmentService {
+  rpc CreateSubjectEnrollment(CreateSubjectEnrollmentRequest) returns (SubjectEnrollmentResponse) {}
+  rpc GetSubjectEnrollment(GetSubjectEnrollmentRequest) returns (SubjectEnrollmentResponse) {}
+  rpc ListSubjectEnrollments(ListSubjectEnrollmentsRequest) returns (ListSubjectEnrollmentsResponse) {}
+  rpc ChangeSubjectEnrollmentStatus(ChangeSubjectEnrollmentStatusRequest) returns (SubjectEnrollmentResponse) {}
 }
 
 service HealthService {

@@ -1,7 +1,157 @@
 syntax = "proto3";
+
 package usuarios.v1;
 
 message Empty {}
+
+message User {
+  string id = 1;
+  string username = 2;
+  string email = 3;
+  string nombres = 4;
+  string apellidos = 5;
+  string identificacion = 6;
+  string telefono = 7;
+  string estado = 8;
+  string rol_id = 9;
+  string rol_nombre = 10;
+  string carrera_id = 11;
+  string carrera_codigo = 12;
+  string carrera_nombre = 13;
+  string facultad_id = 14;
+  string facultad_codigo = 15;
+  string facultad_nombre = 16;
+  string creado_en = 17;
+  string actualizado_en = 18;
+}
+
+message CreateUserRequest {
+  string username = 1;
+  string email = 2;
+  string nombres = 3;
+  string apellidos = 4;
+  string identificacion = 5;
+  string telefono = 6;
+  string rol_id = 7;
+  string rol_nombre = 8;
+  string carrera_id = 9;
+  string carrera_codigo = 10;
+  string estado = 11;
+  string password_hash = 12;
+  string temporary_password = 13;
+}
+
+message UpdateUserRequest {
+  string id = 1;
+  string username = 2;
+  string email = 3;
+  string nombres = 4;
+  string apellidos = 5;
+  string identificacion = 6;
+  string telefono = 7;
+  string rol_id = 8;
+  string rol_nombre = 9;
+  string carrera_id = 10;
+  string carrera_codigo = 11;
+  string estado = 12;
+  string password_hash = 13;
+  string temporary_password = 14;
+}
+
+message GetUserRequest {
+  string id = 1;
+  string username = 2;
+  string email = 3;
+  string identificacion = 4;
+}
+
+message SearchUsersRequest {
+  string query = 1;
+  string estado = 2;
+  string rol_nombre = 3;
+  string carrera_id = 4;
+  string carrera_codigo = 5;
+  string facultad_id = 6;
+  string facultad_codigo = 7;
+  int32 limit = 8;
+  int32 offset = 9;
+}
+
+message UserIdRequest {
+  string id = 1;
+}
+
+message UserResponse {
+  User user = 1;
+}
+
+message ListUsersResponse {
+  repeated User users = 1;
+  int32 total = 2;
+  int32 limit = 3;
+  int32 offset = 4;
+}
+
+message GenericResponse {
+  bool success = 1;
+  string message = 2;
+  string affected_id = 3;
+}
+
+message Role {
+  string id = 1;
+  string nombre = 2;
+  string descripcion = 3;
+  string estado = 4;
+}
+
+message ListRolesRequest {
+  string estado = 1;
+}
+
+message ListRolesResponse {
+  repeated Role roles = 1;
+}
+
+message Facultad {
+  string id = 1;
+  string codigo = 2;
+  string nombre = 3;
+  string descripcion = 4;
+  string estado = 5;
+}
+
+message ListFacultadesRequest {
+  string estado = 1;
+}
+
+message ListFacultadesResponse {
+  repeated Facultad facultades = 1;
+}
+
+message Carrera {
+  string id = 1;
+  string codigo = 2;
+  string nombre = 3;
+  string descripcion = 4;
+  string nivel = 5;
+  string modalidad = 6;
+  int32 duracion_periodos = 7;
+  string estado = 8;
+  string facultad_id = 9;
+  string facultad_codigo = 10;
+  string facultad_nombre = 11;
+}
+
+message ListCarrerasRequest {
+  string facultad_id = 1;
+  string facultad_codigo = 2;
+  string estado = 3;
+}
+
+message ListCarrerasResponse {
+  repeated Carrera carreras = 1;
+}
 
 message HealthResponse {
   string status = 1;
@@ -19,6 +169,21 @@ message LiveResponse {
   bool alive = 1;
   string timestamp = 2;
   double uptime = 3;
+}
+
+service UserManagementService {
+  rpc CreateUser(CreateUserRequest) returns (UserResponse) {}
+  rpc UpdateUser(UpdateUserRequest) returns (UserResponse) {}
+  rpc GetUser(GetUserRequest) returns (UserResponse) {}
+  rpc SearchUsers(SearchUsersRequest) returns (ListUsersResponse) {}
+  rpc DisableUser(UserIdRequest) returns (GenericResponse) {}
+  rpc ActivateUser(UserIdRequest) returns (GenericResponse) {}
+  rpc ListRoles(ListRolesRequest) returns (ListRolesResponse) {}
+}
+
+service AcademicStructureService {
+  rpc ListFacultades(ListFacultadesRequest) returns (ListFacultadesResponse) {}
+  rpc ListCarreras(ListCarrerasRequest) returns (ListCarrerasResponse) {}
 }
 
 service HealthService {
