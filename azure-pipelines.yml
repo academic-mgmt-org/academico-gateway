@@ -279,6 +279,13 @@ stages:
           require_env "$name"
         done
 
+        if [ "$USUARIOS_API_KEY" = "$LOGIN_API_KEY" ]; then
+          echo "USUARIOS_API_KEY must be different from LOGIN_API_KEY for the development gateway."
+          exit 1
+        fi
+
+        EXPECTED_USUARIOS_API_KEY_SHA256="$(printf '%s' "$USUARIOS_API_KEY" | sha256sum | awk '{print $1}')"
+
         if [ ! -f "$COMPOSE_SOURCE_FILE" ]; then
           echo "Missing compose source file: $COMPOSE_SOURCE_FILE"
           exit 1
@@ -330,7 +337,7 @@ stages:
 
         echo "Deploying development gateway container..."
         ssh "${SSH_OPTS[@]}" "$REMOTE" \
-          "REMOTE_GATEWAY_PATH='$REMOTE_GATEWAY_PATH' COMPOSE_FILE='$COMPOSE_FILE' SERVICE_NAME='$SERVICE_NAME' CONTAINER_NAME='$CONTAINER_NAME' GATEWAY_GRPC_PORT='$GRPC_PORT' bash -se" << 'REMOTE_SCRIPT'
+          "REMOTE_GATEWAY_PATH='$REMOTE_GATEWAY_PATH' COMPOSE_FILE='$COMPOSE_FILE' SERVICE_NAME='$SERVICE_NAME' CONTAINER_NAME='$CONTAINER_NAME' GATEWAY_GRPC_PORT='$GRPC_PORT' EXPECTED_USUARIOS_API_KEY_SHA256='$EXPECTED_USUARIOS_API_KEY_SHA256' bash -se" << 'REMOTE_SCRIPT'
         set -euo pipefail
 
         cd "$REMOTE_GATEWAY_PATH"
@@ -414,6 +421,21 @@ stages:
 
         echo "Verifying gateway service..."
         container_id="$(wait_for_service "$SERVICE_NAME")"
+        container_usuarios_api_key="$(
+          docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$container_id" |
+            awk -F= '$1 == "USUARIOS_API_KEY" {print substr($0, index($0, "=") + 1); exit}'
+        )"
+        if [ -z "$container_usuarios_api_key" ]; then
+          echo "Gateway container does not define USUARIOS_API_KEY."
+          exit 1
+        fi
+        actual_usuarios_api_key_sha256="$(printf '%s' "$container_usuarios_api_key" | sha256sum | awk '{print $1}')"
+        if [ "$actual_usuarios_api_key_sha256" != "$EXPECTED_USUARIOS_API_KEY_SHA256" ]; then
+          echo "Gateway container did not receive the USUARIOS_API_KEY supplied by the development pipeline."
+          exit 1
+        fi
+        echo "Gateway container received the expected USUARIOS_API_KEY."
+
         network_mode="$(docker inspect -f '{{.HostConfig.NetworkMode}}' "$container_id")"
         if [ "$network_mode" != "host" ]; then
           echo "Gateway container must use host networking, got: $network_mode"
