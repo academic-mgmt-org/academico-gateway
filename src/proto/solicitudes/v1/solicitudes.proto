@@ -1,0 +1,167 @@
+syntax = "proto3";
+
+package solicitudes.v1;
+
+message Empty {}
+
+message AcademicRequest {
+  string id = 1;
+  string codigo = 2;
+  string estudiante_id = 3;
+  string estudiante_cedula = 4;
+  string tipo = 5;
+  string asunto = 6;
+  string descripcion = 7;
+  string prioridad = 8;
+  string estado = 9;
+  string solicitante_email = 10;
+  string asignado_a = 11;
+  string resolucion = 12;
+  string fecha_resolucion = 13;
+  string creado_en = 14;
+  string actualizado_en = 15;
+  int32 documentos_count = 16;
+}
+
+message RequestDocument {
+  string id = 1;
+  string solicitud_id = 2;
+  string nombre_archivo = 3;
+  string tipo_documento = 4;
+  string url = 5;
+  string checksum = 6;
+  string cargado_por = 7;
+  string creado_en = 8;
+}
+
+message CreateAcademicRequestRequest {
+  string estudiante_id = 1;
+  string estudiante_cedula = 2;
+  string tipo = 3;
+  string asunto = 4;
+  string descripcion = 5;
+  string prioridad = 6;
+  string solicitante_email = 7;
+}
+
+message GetAcademicRequestRequest {
+  string id = 1;
+  string codigo = 2;
+}
+
+message ListAcademicRequestsRequest {
+  string estudiante_id = 1;
+  string estudiante_cedula = 2;
+  string tipo = 3;
+  string estado = 4;
+  string prioridad = 5;
+  string asignado_a = 6;
+  int32 limit = 7;
+  int32 offset = 8;
+}
+
+message ChangeAcademicRequestStatusRequest {
+  string id = 1;
+  string estado = 2;
+  string comentario = 3;
+  string actor_id = 4;
+}
+
+message AssignAcademicRequestRequest {
+  string id = 1;
+  string asignado_a = 2;
+  string comentario = 3;
+}
+
+message ResolveAcademicRequestRequest {
+  string id = 1;
+  string resolucion = 2;
+  string estado = 3;
+  string actor_id = 4;
+}
+
+message CancelAcademicRequestRequest {
+  string id = 1;
+  string motivo = 2;
+  string actor_id = 3;
+}
+
+message AddRequestDocumentRequest {
+  string solicitud_id = 1;
+  string nombre_archivo = 2;
+  string tipo_documento = 3;
+  string url = 4;
+  string checksum = 5;
+  string cargado_por = 6;
+}
+
+message ListRequestDocumentsRequest {
+  string solicitud_id = 1;
+  int32 limit = 2;
+  int32 offset = 3;
+}
+
+message AcademicRequestResponse {
+  AcademicRequest academic_request = 1;
+}
+
+message ListAcademicRequestsResponse {
+  repeated AcademicRequest academic_requests = 1;
+  int32 total = 2;
+  int32 limit = 3;
+  int32 offset = 4;
+}
+
+message RequestDocumentResponse {
+  RequestDocument document = 1;
+}
+
+message ListRequestDocumentsResponse {
+  repeated RequestDocument documents = 1;
+  int32 total = 2;
+  int32 limit = 3;
+  int32 offset = 4;
+}
+
+message GenericResponse {
+  bool success = 1;
+  string message = 2;
+  string affected_id = 3;
+  int32 affected = 4;
+}
+
+message HealthResponse {
+  string status = 1;
+  string service = 2;
+  string timestamp = 3;
+  double uptime = 4;
+}
+
+message ReadyResponse {
+  bool ready = 1;
+  string timestamp = 2;
+}
+
+message LiveResponse {
+  bool alive = 1;
+  string timestamp = 2;
+  double uptime = 3;
+}
+
+service AcademicRequestService {
+  rpc CreateAcademicRequest(CreateAcademicRequestRequest) returns (AcademicRequestResponse) {}
+  rpc GetAcademicRequest(GetAcademicRequestRequest) returns (AcademicRequestResponse) {}
+  rpc ListAcademicRequests(ListAcademicRequestsRequest) returns (ListAcademicRequestsResponse) {}
+  rpc ChangeAcademicRequestStatus(ChangeAcademicRequestStatusRequest) returns (AcademicRequestResponse) {}
+  rpc AssignAcademicRequest(AssignAcademicRequestRequest) returns (AcademicRequestResponse) {}
+  rpc ResolveAcademicRequest(ResolveAcademicRequestRequest) returns (AcademicRequestResponse) {}
+  rpc CancelAcademicRequest(CancelAcademicRequestRequest) returns (AcademicRequestResponse) {}
+  rpc AddRequestDocument(AddRequestDocumentRequest) returns (RequestDocumentResponse) {}
+  rpc ListRequestDocuments(ListRequestDocumentsRequest) returns (ListRequestDocumentsResponse) {}
+}
+
+service HealthService {
+  rpc Health(Empty) returns (HealthResponse) {}
+  rpc Ready(Empty) returns (ReadyResponse) {}
+  rpc Live(Empty) returns (LiveResponse) {}
+}

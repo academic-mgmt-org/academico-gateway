@@ -10,6 +10,7 @@ const PROTO_PATHS = [
   join(PROTO_ROOT, 'usuarios/v1/usuarios.proto'),
   join(PROTO_ROOT, 'matriculas/v1/matriculas.proto'),
   join(PROTO_ROOT, 'calificaciones/v1/calificaciones.proto'),
+  join(PROTO_ROOT, 'solicitudes/v1/solicitudes.proto'),
   join(PROTO_ROOT, 'notificaciones/v1/notificaciones.proto'),
   join(PROTO_ROOT, 'grpc/health/v1/health.proto'),
 ];
@@ -61,6 +62,12 @@ const ROUTE_PREFIXES = [
     routeName: 'calificaciones',
     baseUrlEnv: 'CALIFICACIONES_BASE_URL',
     apiKeyEnv: 'CALIFICACIONES_API_KEY',
+  },
+  {
+    prefix: 'solicitudes.v1.',
+    routeName: 'solicitudes',
+    baseUrlEnv: 'SOLICITUDES_BASE_URL',
+    apiKeyEnv: 'SOLICITUDES_API_KEY',
   },
 ];
 
@@ -138,11 +145,14 @@ const STANDARD_HEALTH_ROUTES = [
     routeName: 'solicitudes',
     baseUrlEnv: 'SOLICITUDES_BASE_URL',
     apiKeyEnv: 'SOLICITUDES_API_KEY',
+    customHealthServiceName: 'solicitudes.v1.HealthService',
     aliases: [
       'solicitudes',
       'solicitud',
       'requests',
       'academico-solicitudes',
+      'solicitudes.v1.AcademicRequestService',
+      'solicitudes.v1.HealthService',
     ],
   },
 ];

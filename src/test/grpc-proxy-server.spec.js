@@ -37,6 +37,25 @@ describe('GrpcProxyServer', () => {
     expect(resolveGrpcProxyRoute('catalogo.v1.CatalogoService')).toBeNull();
   });
 
+  it('enruta cualquier servicio solicitudes.v1 al upstream de solicitudes', () => {
+    const env = {
+      SOLICITUDES_BASE_URL: 'http://academico-solicitudes:3006',
+      SOLICITUDES_API_KEY: 'internal-solicitudes-key',
+    };
+
+    expect(resolveGrpcProxyRoute('solicitudes.v1.AcademicRequestService', env)).toMatchObject({
+      routeName: 'solicitudes',
+      target: 'academico-solicitudes:3006',
+      apiKey: 'internal-solicitudes-key',
+    });
+
+    expect(resolveGrpcProxyRoute('solicitudes.v1.HealthService', env)).toMatchObject({
+      routeName: 'solicitudes',
+      target: 'academico-solicitudes:3006',
+      apiKey: 'internal-solicitudes-key',
+    });
+  });
+
   it('enruta health custom de servicios academicos al upstream correspondiente', () => {
     const env = {
       USUARIOS_BASE_URL: 'http://academico-usuarios:3002',
@@ -47,6 +66,8 @@ describe('GrpcProxyServer', () => {
       CALIFICACIONES_API_KEY: 'calificaciones-key',
       NOTIFICACIONES_BASE_URL: 'http://academico-notificaciones:3003',
       NOTIFICACIONES_API_KEY: 'notificaciones-key',
+      SOLICITUDES_BASE_URL: 'http://academico-solicitudes:3006',
+      SOLICITUDES_API_KEY: 'solicitudes-key',
     };
 
     expect(resolveGrpcProxyRoute('usuarios.v1.HealthService', env)).toMatchObject({
@@ -63,6 +84,11 @@ describe('GrpcProxyServer', () => {
       routeName: 'calificaciones',
       target: 'academico-calificaciones:3004',
       apiKey: 'calificaciones-key',
+    });
+    expect(resolveGrpcProxyRoute('solicitudes.v1.HealthService', env)).toMatchObject({
+      routeName: 'solicitudes',
+      target: 'academico-solicitudes:3006',
+      apiKey: 'solicitudes-key',
     });
     expect(resolveGrpcProxyRoute('grpc.health.v1.Health', env)).toBeNull();
   });
@@ -127,15 +153,22 @@ describe('GrpcProxyServer', () => {
     expect(upstreamMetadata.get('x-api-key')).toEqual(['internal-key']);
   });
 
-  it('publica servicios gRPC necesarios para los probes de health', () => {
+  it('publica los servicios gRPC de salud y negocio del gateway', () => {
     const packageDefinition = loadGatewayPackageDefinition();
 
     expect(packageDefinition['auth.v1.AuthService']).toBeDefined();
     expect(packageDefinition['auth.v1.HealthService']).toBeDefined();
     expect(packageDefinition['auth.v1.WhitelistService']).toBeDefined();
+    expect(packageDefinition['usuarios.v1.UserManagementService']).toBeDefined();
+    expect(packageDefinition['usuarios.v1.AcademicStructureService']).toBeDefined();
     expect(packageDefinition['usuarios.v1.HealthService']).toBeDefined();
+    expect(packageDefinition['matriculas.v1.EnrollmentService']).toBeDefined();
+    expect(packageDefinition['matriculas.v1.SubjectEnrollmentService']).toBeDefined();
     expect(packageDefinition['matriculas.v1.HealthService']).toBeDefined();
+    expect(packageDefinition['calificaciones.v1.GradingService']).toBeDefined();
     expect(packageDefinition['calificaciones.v1.HealthService']).toBeDefined();
+    expect(packageDefinition['solicitudes.v1.AcademicRequestService']).toBeDefined();
+    expect(packageDefinition['solicitudes.v1.HealthService']).toBeDefined();
     expect(packageDefinition['notificaciones.v1.NotificationService']).toBeDefined();
     expect(packageDefinition['notificaciones.v1.EmailService']).toBeDefined();
     expect(packageDefinition['notificaciones.v1.HealthService']).toBeDefined();
