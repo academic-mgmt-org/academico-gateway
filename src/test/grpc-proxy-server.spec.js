@@ -174,4 +174,32 @@ describe('GrpcProxyServer', () => {
     expect(packageDefinition['notificaciones.v1.HealthService']).toBeDefined();
     expect(packageDefinition['grpc.health.v1.Health']).toBeDefined();
   });
+
+  it('preserva los nombres snake_case del contrato protobuf publicado', () => {
+    const packageDefinition = loadGatewayPackageDefinition();
+    const enrollmentService = packageDefinition['matriculas.v1.EnrollmentService'];
+
+    expect(
+      enrollmentService.CreateEnrollment.requestType.type.field.map(({ name }) => name),
+    ).toEqual([
+      'estudiante_id',
+      'oferta_curso_id',
+      'estudiante_cedula',
+      'estado',
+      'observacion',
+    ]);
+    expect(
+      enrollmentService.ListEnrollments.requestType.type.field.map(({ name }) => name),
+    ).toEqual([
+      'estudiante_id',
+      'estudiante_cedula',
+      'oferta_curso_id',
+      'ciclo_acad_codigo',
+      'materia_codigo',
+      'paralelo_codigo',
+      'estado',
+      'limit',
+      'offset',
+    ]);
+  });
 });

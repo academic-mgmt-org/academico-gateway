@@ -16,7 +16,7 @@ const PROTO_PATHS = [
 ];
 
 const PROTO_LOADER_OPTIONS = {
-  keepCase: false,
+  keepCase: true,
   longs: String,
   enums: String,
   defaults: true,
